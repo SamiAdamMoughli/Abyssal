@@ -310,3 +310,56 @@ einsatzreifes Werkzeug. Bevor dieses System reale Entscheidungen stützt, brauch
 Bis dahin gilt: Die Begründungen sind belastbarer als die Zahlen. Mission Radar
 **priorisiert Aufmerksamkeit** und macht seine Annahmen transparent — es trifft
 keine Schuldfeststellung.
+
+---
+
+## Validierung gegen bekannte IUU-Fälle
+
+Ein erster, ehrlicher Qualitätsschritt: Hätte die Engine reale, dokumentierte
+IUU-Fälle hoch bewertet? Das Validierungs-Framework liegt **getrennt** von der
+Engine in [backend/validation/](backend/validation/) — es ruft die Engine nur auf,
+ändert sie nie.
+
+```bash
+cd backend
+.venv/bin/python -m validation.validate_scores
+```
+
+**Was passiert:** Bekannte Fälle aus
+[known_cases.py](backend/validation/known_cases.py) (Thunder, Viking, Kunlun,
+STS-50, Fu Yuan Yu Leng 999 + eine konstruierte Negativkontrolle) laufen durch
+`rank_targets()`. Das Skript zeigt pro Fall Score, angeschlagene Regeln und die
+Klassifikation (TP/FN/FP/TN) und am Ende eine ehrliche Auswertung mit
+True-Positive-Rate, Schwächen und Empfehlungen.
+
+**Aktuelles Ergebnis (Schwelle Score ≥ 50):**
+
+| Kennzahl | Wert |
+| --- | --- |
+| Bekannte IUU-Fälle | 5 |
+| Korrekt erkannt (TP) | 4 → **TP-Rate 80 %** |
+| Nicht erkannt (FN) | 1 — *Fu Yuan Yu Leng 999* |
+| Negativkontrolle | TN=1, FP=0 |
+
+**Was die Ergebnisse bedeuten:** Die vier aktiv fischenden Poacher (AIS aus,
+Fischerei-Tempo, im Sperrgebiet, Verweilen) werden klar erkannt. Der **Reefer**
+*Fu Yuan Yu Leng 999* — 2017 mit ~6.600 Haien im Galápagos-Reservat gestellt —
+rutscht durch: Er fischte nicht aktiv (kein Fischerei-Tempo) und hatte AIS an,
+also greift nur die Schutzgebiets-Regel (+35). Das ist eine **echte, bewusst
+gezeigte Schwäche** regelbasierter Speed-/Gap-Logik, kein Zufall.
+
+> ⚠️ **Ehrlich:** Die Eingabewerte sind **synthetische Approximationen**
+> dokumentierten Verhaltens, **keine** echten AIS-Traces. Jeder Fall trägt eine
+> Quelle und ist als `approx` markiert. Eine kleine, handverlesene Fallzahl ist
+> **keine** statistische Validierung.
+
+**Nächste Schritte zur echten Validierung:**
+
+1. **Echte AIS-Traces** der bekannten Fälle über den GFW-Token ziehen (Position,
+   Speed, Gaps zum Tatzeitpunkt) statt sie zu schätzen.
+2. **Größerer, unabhängig gelabelter Datensatz** mit Positiv- *und* Negativfällen
+   (z. B. CCAMLR/Interpol-Listen vs. verifiziert legale Fahrzeuge).
+3. **Schwelle und Gewichte kalibrieren** statt zu raten; Fehlerraten quantifizieren.
+4. **Neue Regeln** für die gefundenen Lücken (Transshipment/Encounter,
+   Identitäts-/Flaggenwechsel, Watchlist-Abgleich) — über die `RULES`-Liste,
+   ohne die Engine umzubauen.
