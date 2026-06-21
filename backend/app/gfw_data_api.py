@@ -20,9 +20,10 @@ Doku / Key-Beschaffung:
 
 from __future__ import annotations
 
+import json
 import logging
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import requests
 from dotenv import load_dotenv
@@ -166,6 +167,49 @@ def list_datasets(page_size: int = 100) -> List[Dict[str, Any]]:
             "Unerwartetes Format von GET /datasets - keine Liste gefunden."
         )
     return data
+
+
+# --------------------------------------------------------------------------- #
+# Schutzgebiets-Polygone fuer eine bbox holen (fuer Karte + lokale Punktpruefung)
+# --------------------------------------------------------------------------- #
+# Verifiziert gegen die Live-API: die SQL-Funktionen ST_MakeEnvelope,
+# ST_Intersects und ST_AsGeoJSON werden unterstuetzt.
+
+
+def fetch_protected_areas_geojson(bbox: Tuple[float, float, float, float]) -> Dict[str, Any]:
+    """Holt echte WDPA-Schutzgebiete, die eine bbox schneiden, als GeoJSON.
+
+    bbox = (min_lon, min_lat, max_lon, max_lat). Rueckgabe ist eine GeoJSON
+    FeatureCollection mit den Properties name + iucn_cat - geeignet sowohl als
+    Karten-Layer als auch als Eingabe fuer die lokale shapely-Punktpruefung.
+    """
+    min_lon, min_lat, max_lon, max_lat = bbox
+    envelope = f"ST_MakeEnvelope({min_lon},{min_lat},{max_lon},{max_lat},4326)"
+    sql = (
+        f"SELECT name, iucn_cat, ST_AsGeoJSON({WDPA_GEOM_COLUMN}) AS geojson "
+        f"FROM data WHERE ST_Intersects({WDPA_GEOM_COLUMN}, {envelope})"
+    )
+    path = f"/dataset/{WDPA_DATASET}/{WDPA_VERSION}/query/json"
+    payload = _get(path, params={"sql": sql})
+    rows = payload.get("data", payload)
+    if not isinstance(rows, list):
+        raise GfwDataApiError("Unerwartetes Query-Format - keine Zeilenliste.")
+
+    features: List[Dict[str, Any]] = []
+    for row in rows:
+        raw = row.get("geojson")
+        if not raw:
+            continue
+        try:
+            geometry = json.loads(raw)
+        except (TypeError, ValueError):
+            continue  # defekte Geometrie ueberspringen statt crashen
+        features.append({
+            "type": "Feature",
+            "properties": {"name": row.get("name"), "iucn_cat": row.get("iucn_cat")},
+            "geometry": geometry,
+        })
+    return {"type": "FeatureCollection", "features": features}
 
 
 # --------------------------------------------------------------------------- #

@@ -19,7 +19,7 @@ import os
 
 from fastapi import HTTPException, Query
 
-from . import risk_engine
+from . import geo, risk_engine
 from .risk_engine import RiskReason, TargetAssessment
 from .sample_data import PROTECTED_AREA_CENTER, VesselSource, get_source
 
@@ -170,3 +170,19 @@ def get_vessels(source: str = _SOURCE_QUERY) -> Dict[str, Any]:
         "protected_area_center": PROTECTED_AREA_CENTER,
         "vessels": [_assessment_to_dict(a) for a in assessments],
     }
+
+
+@app.get("/api/protected-areas")
+def get_protected_areas() -> Dict[str, Any]:
+    """Schutzgebiets-Polygone als GeoJSON - fuer den Karten-Layer.
+
+    Quelle (lokal oder echte WDPA-Daten) steuert geo.py via PROTECTED_AREA_SOURCE.
+    Fehler der Geo-Quelle werden als HTTP 502 gemeldet, nie still verschluckt.
+    """
+    try:
+        return geo.get_protected_areas_geojson()
+    except Exception as exc:  # z. B. GfwDataApiError bei Quelle "gfw"
+        raise HTTPException(
+            status_code=502,
+            detail=f"Schutzgebiets-Daten konnten nicht geladen werden: {exc}",
+        ) from exc
