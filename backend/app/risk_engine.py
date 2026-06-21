@@ -1,0 +1,208 @@
+"""Mission Radar - Risk Engine.
+
+Das Herzstueck des Systems. Diese Datei ist bewusst frei von jeder Datenquelle:
+Die Engine kennt nur die `Vessel`-Datenklasse als Vertrag. In Phase 2 wird die
+Datenquelle ausgetauscht (echte AIS-Daten statt synthetischer) - solange diese
+Quelle `Vessel`-Objekte liefert, bleibt die Engine unveraendert.
+
+Designgrundsatz: Erklaerbarkeit vor Cleverness. Jede Regel MUSS eine
+menschenlesbare Begruendung liefern. Ein Score ohne Begruendung ist hier ein Bug.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Callable, List, Optional
+
+# --------------------------------------------------------------------------- #
+# Vertraege (Datenklassen)
+# --------------------------------------------------------------------------- #
+
+
+@dataclass
+class Vessel:
+    """Ein Schiff zu einem Zeitpunkt - der Input der Engine.
+
+    Dies ist der einzige Vertrag zwischen Datenquelle und Engine. Jede Quelle
+    (synthetisch, GFW-API, eigene AIS-Aufzeichnung) muss Objekte dieser Form
+    liefern. Felder mit Default sind optional, damit unvollstaendige Quellen
+    die Engine nicht sprengen.
+    """
+
+    mmsi: str
+    name: str
+    lat: float
+    lon: float
+    speed_knots: float = 0.0
+    in_protected_area: bool = False
+    ais_gap_hours: float = 0.0
+    flag: str = "UNK"
+    loitering_hours: float = 0.0
+
+
+@dataclass
+class RiskReason:
+    """Eine einzelne Begruendung fuer einen Risikobeitrag.
+
+    points  - numerischer Beitrag zum Score
+    label   - kurz, fuer das UI-Badge ("Im Schutzgebiet")
+    detail  - ausfuehrlich, fuer den Tooltip / die Erklaerung
+    """
+
+    points: float
+    label: str
+    detail: str
+
+
+@dataclass
+class TargetAssessment:
+    """Das Ergebnis der Bewertung eines Schiffs - der Output der Engine."""
+
+    vessel: Vessel
+    score: float
+    reasons: List[RiskReason] = field(default_factory=list)
+
+    @property
+    def top_reason(self) -> Optional[RiskReason]:
+        """Die staerkste Einzelbegruendung - fuer eine knappe UI-Zusammenfassung."""
+        if not self.reasons:
+            return None
+        return max(self.reasons, key=lambda r: r.points)
+
+
+# Eine Regel ist eine Funktion Vessel -> Optional[RiskReason].
+Rule = Callable[[Vessel], Optional[RiskReason]]
+
+SCORE_CAP = 100.0
+
+
+# --------------------------------------------------------------------------- #
+# Regeln
+# --------------------------------------------------------------------------- #
+# Jede Regel ist eine reine Funktion. Gibt sie None zurueck, traegt sie nichts
+# zum Score bei. Gibt sie einen RiskReason zurueck, MUSS dieser eine
+# menschenlesbare Begruendung enthalten.
+
+
+def rule_protected_area(v: Vessel) -> Optional[RiskReason]:
+    """Aufenthalt in einem ausgewiesenen Schutzgebiet ist das staerkste Signal."""
+    if v.in_protected_area:
+        return RiskReason(
+            points=35,
+            label="Im Schutzgebiet",
+            detail=(
+                "Das Schiff befindet sich innerhalb eines ausgewiesenen "
+                "Meeresschutzgebiets (MPA). Fischerei ist hier in der Regel "
+                "verboten oder stark eingeschraenkt."
+            ),
+        )
+    return None
+
+
+def rule_fishing_speed(v: Vessel) -> Optional[RiskReason]:
+    """Geschwindigkeiten von 2-5 kn sind typisch fuer aktive Fischerei."""
+    if 2.0 <= v.speed_knots <= 5.0:
+        return RiskReason(
+            points=20,
+            label="Fischerei-Tempo",
+            detail=(
+                f"Geschwindigkeit {v.speed_knots:.1f} kn liegt im typischen "
+                "Bereich aktiver Fischerei (2-5 kn, z. B. Schleppnetz). "
+                "Transit laeuft meist deutlich schneller."
+            ),
+        )
+    return None
+
+
+def rule_ais_gap(v: Vessel) -> Optional[RiskReason]:
+    """AIS-Luecken deuten auf bewusstes Abschalten ("going dark") hin.
+
+    Gestufte Bewertung: laengere Luecken sind verdaechtiger. Es wird nur EINE
+    Begruendung erzeugt (die hoehere Stufe gewinnt), damit Luecken nicht doppelt
+    zaehlen.
+    """
+    if v.ais_gap_hours >= 12:
+        return RiskReason(
+            points=25,
+            label="AIS-Luecke >=12h",
+            detail=(
+                f"AIS-Signal {v.ais_gap_hours:.0f}h unterbrochen. Lange Luecken "
+                "deuten auf bewusstes Abschalten des Transponders hin "
+                '("going dark") - ein klassisches Verschleierungsmuster.'
+            ),
+        )
+    if v.ais_gap_hours >= 4:
+        return RiskReason(
+            points=10,
+            label="AIS-Luecke >=4h",
+            detail=(
+                f"AIS-Signal {v.ais_gap_hours:.0f}h unterbrochen. Eine moderate "
+                "Luecke kann technisch bedingt sein, ist aber beobachtenswert."
+            ),
+        )
+    return None
+
+
+def rule_loitering(v: Vessel) -> Optional[RiskReason]:
+    """Langes Verweilen auf engem Raum deutet auf Fang/Umladen statt Transit."""
+    if v.loitering_hours >= 6:
+        return RiskReason(
+            points=15,
+            label="Verweilen >=6h",
+            detail=(
+                f"Das Schiff verweilt seit {v.loitering_hours:.0f}h auf engem "
+                "Raum. Anhaltendes Loitering deutet auf Fang oder Umladung "
+                "(Transshipment) hin, nicht auf Durchfahrt."
+            ),
+        )
+    return None
+
+
+# Die Regel-Registry. NEUE REGELN werden ausschliesslich hier eingetragen -
+# kein anderer Code muss angefasst werden.
+RULES: List[Rule] = [
+    rule_protected_area,
+    rule_fishing_speed,
+    rule_ais_gap,
+    rule_loitering,
+]
+
+
+# --------------------------------------------------------------------------- #
+# Engine
+# --------------------------------------------------------------------------- #
+
+
+def assess(vessel: Vessel, rules: Optional[List[Rule]] = None) -> TargetAssessment:
+    """Bewertet ein einzelnes Schiff gegen alle Regeln.
+
+    Score = Summe aller Begruendungen, gedeckelt bei SCORE_CAP (100).
+    """
+    active_rules = rules if rules is not None else RULES
+    reasons: List[RiskReason] = []
+    for rule in active_rules:
+        reason = rule(vessel)
+        if reason is not None:
+            reasons.append(reason)
+
+    raw_score = sum(r.points for r in reasons)
+    score = min(raw_score, SCORE_CAP)
+    # Staerkste Begruendung zuerst - die UI zeigt sie als top_reason.
+    reasons.sort(key=lambda r: r.points, reverse=True)
+    return TargetAssessment(vessel=vessel, score=score, reasons=reasons)
+
+
+def assess_all(vessels: List[Vessel]) -> List[TargetAssessment]:
+    """Bewertet alle Schiffe (z. B. fuer die Kartendarstellung)."""
+    return [assess(v) for v in vessels]
+
+
+def rank_targets(vessels: List[Vessel], top_n: int = 5) -> List[TargetAssessment]:
+    """Liefert die Top-N Ziele nach Score absteigend.
+
+    Ziele mit Score 0 (keine einzige Begruendung) werden ausgeschlossen - ein
+    Ziel ohne Begruendung ist im Sinne dieses Projekts kein Ziel.
+    """
+    assessments = [a for a in assess_all(vessels) if a.score > 0]
+    assessments.sort(key=lambda a: a.score, reverse=True)
+    return assessments[:top_n]
