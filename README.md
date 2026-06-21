@@ -8,6 +8,36 @@ Fishing Watch, Sea Shepherd. Naturschutz-Projekt.
 > *„Hier sind die wahrscheinlichsten Ziele, und das ist der Grund."*
 > Erklärbarkeit hat Vorrang vor Cleverness.
 
+📐 **Zielbild & Leitprinzipien:** [ARCHITECTURE.md](ARCHITECTURE.md) — beschreibt die
+Vision und die bewusste Grenze zwischen automatischer Schiffs-/Verhaltensanalyse
+(Zone A) und menschengeführter Ermittlungsarbeit über Personen (Zone B).
+
+---
+
+## Was heute wirklich läuft (vs. geplant)
+
+Ehrlicher Stand — das System trennt klar zwischen Gebautem und Geplantem:
+
+| Funktioniert heute | Status |
+| --- | --- |
+| Regelbasierte Risk Engine (5 Regeln, erklärbar) | ✅ |
+| Synthetische Datenquelle (läuft **ohne** Token) | ✅ |
+| Echte AIS-Daten via Global Fishing Watch API v3 (mit Token) | ✅ |
+| Echte WDPA-Schutzgebiete via Global Forest Watch Data API (mit Key) | ✅ |
+| Dynamische Region („Search this area", bbox pro Anfrage, weltweit) | ✅ |
+| MPA-Layer auf der Karte + Highlight für Schiffe im Schutzgebiet | ✅ |
+| Score-Kalibrierung + Validierung gegen bekannte IUU-Fälle | ✅ |
+| Sea-Shepherd-UI (dark, mobil) | ✅ |
+
+| Geplant / Vision | Phase |
+| --- | --- |
+| Hotspot-Intelligence (4Wings apparent fishing effort) | 3 |
+| Muster-/Anomalie-Erkennung | 3 |
+| Schiffsprofile + Abgleich offizieller Listen (FAO/RFMO) | 4 |
+| Analysten-Workspace (Fälle/Notizen, **menschengeführt**) | 5 (Zone B) |
+
+Details und die Roadmap: [ARCHITECTURE.md](ARCHITECTURE.md), Abschnitt 6.
+
 ---
 
 ## Architektur
