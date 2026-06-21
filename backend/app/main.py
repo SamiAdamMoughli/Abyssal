@@ -15,9 +15,13 @@ from typing import Any, Dict, List
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+import os
+
+from fastapi import HTTPException, Query
+
 from . import risk_engine
 from .risk_engine import RiskReason, TargetAssessment
-from .sample_data import PROTECTED_AREA_CENTER, get_source
+from .sample_data import PROTECTED_AREA_CENTER, VesselSource, get_source
 
 app = FastAPI(
     title="Mission Radar API",
@@ -38,9 +42,53 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Die Datenquelle wird einmal aufgeloest. In Phase 2 aendert sich nur, was
-# get_source() zurueckgibt - dieser Code bleibt gleich.
-_source = get_source()
+# Welche Datenquelle ist Standard? Aus der Umgebung, Default "synthetic", damit
+# das Projekt ohne GFW-Token laeuft. Pro Request via ?source= ueberschreibbar.
+DEFAULT_DATA_SOURCE = os.environ.get("DATA_SOURCE", "synthetic")
+
+# Die synthetische Quelle wird einmal aufgeloest (guenstig, kein Netzwerk). Die
+# GFW-Quelle wird LAZY erst bei Bedarf erzeugt - so stoert ein fehlender Token
+# den synthetischen Default nicht.
+_synthetic_source = get_source()
+
+
+def resolve_source(name: str) -> VesselSource:
+    """Waehlt die Datenquelle anhand des Namens ("synthetic" oder "gfw").
+
+    GFW wird nur hier importiert/instanziiert, damit das System ohne installierte
+    GFW-Konfiguration im synthetischen Default voll funktioniert.
+    """
+    key = (name or DEFAULT_DATA_SOURCE).lower()
+    if key == "synthetic":
+        return _synthetic_source
+    if key == "gfw":
+        # Echte AIS-/Schiffsquelle: Global Fishing Watch API (gfw_vessels.py).
+        # Lazy import, damit das System ohne Token im synthetischen Default laeuft.
+        from .gfw_vessels import get_gfw_source  # lazy import
+
+        return get_gfw_source()
+    raise HTTPException(
+        status_code=400,
+        detail=f"Unbekannte Datenquelle '{name}'. Erlaubt: 'synthetic', 'gfw'.",
+    )
+
+
+def _load_vessels(source: str):
+    """Holt die Schiffe der gewaehlten Quelle und uebersetzt Quellen-Fehler sauber.
+
+    GFW-Probleme (Token, Netzwerk, HTTP) werden zu einem klaren HTTP 502 statt zu
+    einem Stacktrace - aber niemals stillschweigend verschluckt.
+    """
+    vessel_source = resolve_source(source)
+    try:
+        return vessel_source.get_vessels()
+    except HTTPException:
+        raise
+    except Exception as exc:  # z. B. GfwApiError
+        raise HTTPException(
+            status_code=502,
+            detail=f"Datenquelle '{source}' fehlgeschlagen: {exc}",
+        ) from exc
 
 
 # --------------------------------------------------------------------------- #
@@ -88,26 +136,36 @@ def health() -> Dict[str, Any]:
         "service": "Mission Radar API",
         "version": app.version,
         "rules_loaded": len(risk_engine.RULES),
+        "default_data_source": DEFAULT_DATA_SOURCE,
     }
 
 
+# Gemeinsame Query-Beschreibung fuer beide Endpunkte.
+_SOURCE_QUERY = Query(
+    default=DEFAULT_DATA_SOURCE,
+    description="Datenquelle: 'synthetic' (Default) oder 'gfw'.",
+)
+
+
 @app.get("/api/targets")
-def get_targets(top_n: int = 5) -> Dict[str, Any]:
+def get_targets(top_n: int = 5, source: str = _SOURCE_QUERY) -> Dict[str, Any]:
     """Top-N Ziele mit Begruendung - gerankt nach Score absteigend."""
-    vessels = _source.get_vessels()
+    vessels = _load_vessels(source)
     ranked = risk_engine.rank_targets(vessels, top_n=top_n)
     return {
+        "source": source,
         "count": len(ranked),
         "targets": [_assessment_to_dict(a) for a in ranked],
     }
 
 
 @app.get("/api/vessels")
-def get_vessels() -> Dict[str, Any]:
+def get_vessels(source: str = _SOURCE_QUERY) -> Dict[str, Any]:
     """Alle Schiffe mit Score - fuer die Kartendarstellung."""
-    vessels = _source.get_vessels()
+    vessels = _load_vessels(source)
     assessments = risk_engine.assess_all(vessels)
     return {
+        "source": source,
         "count": len(assessments),
         "protected_area_center": PROTECTED_AREA_CENTER,
         "vessels": [_assessment_to_dict(a) for a in assessments],
