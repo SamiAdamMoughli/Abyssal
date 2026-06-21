@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import List, Protocol, runtime_checkable
 
+from .geo import is_in_protected_area
 from .risk_engine import Vessel
 
 
@@ -35,6 +36,9 @@ PROTECTED_AREA_CENTER = {"lat": -0.5, "lon": -90.5}
 
 # Bewusst gemischte Szene: klare Verdachtsfaelle, Grenzfaelle und sauberer Transit.
 # So laesst sich pruefen, ob das Ranking sinnvoll trennt statt alles hochzustufen.
+#
+# Hinweis: `in_protected_area` wird hier NICHT mehr gesetzt. Es wird weiter unten
+# pro Schiff aus (lat, lon) ueber geo.is_in_protected_area() berechnet.
 _SAMPLE_VESSELS: List[Vessel] = [
     # --- Klare Verdachtsfaelle (sollten oben landen) ---------------------- #
     Vessel(
@@ -43,7 +47,6 @@ _SAMPLE_VESSELS: List[Vessel] = [
         lat=-0.42,
         lon=-90.61,
         speed_knots=3.2,            # Fischerei-Tempo
-        in_protected_area=True,     # Im Schutzgebiet
         ais_gap_hours=14,           # lange AIS-Luecke
         flag="CHN",
         loitering_hours=8,          # verweilt lange
@@ -54,7 +57,6 @@ _SAMPLE_VESSELS: List[Vessel] = [
         lat=-0.55,
         lon=-90.48,
         speed_knots=2.6,            # Fischerei-Tempo
-        in_protected_area=True,     # Im Schutzgebiet
         ais_gap_hours=5,            # moderate AIS-Luecke
         flag="ECU",
         loitering_hours=7,          # verweilt
@@ -66,7 +68,6 @@ _SAMPLE_VESSELS: List[Vessel] = [
         lat=-0.31,
         lon=-90.20,
         speed_knots=4.4,            # Fischerei-Tempo
-        in_protected_area=False,    # knapp ausserhalb
         ais_gap_hours=13,           # lange AIS-Luecke
         flag="TWN",
         loitering_hours=2,
@@ -77,7 +78,6 @@ _SAMPLE_VESSELS: List[Vessel] = [
         lat=-0.78,
         lon=-90.95,
         speed_knots=3.0,            # Fischerei-Tempo
-        in_protected_area=False,
         ais_gap_hours=0,
         flag="MHL",
         loitering_hours=6,          # verweilt
@@ -89,7 +89,6 @@ _SAMPLE_VESSELS: List[Vessel] = [
         lat=-0.10,
         lon=-89.90,
         speed_knots=13.5,           # klarer Transit
-        in_protected_area=False,
         ais_gap_hours=0,
         flag="LBR",
         loitering_hours=0,
@@ -100,7 +99,6 @@ _SAMPLE_VESSELS: List[Vessel] = [
         lat=-1.05,
         lon=-91.10,
         speed_knots=11.0,           # Transit
-        in_protected_area=False,
         ais_gap_hours=3,            # unterhalb der Schwelle
         flag="ATG",
         loitering_hours=1,
@@ -111,12 +109,16 @@ _SAMPLE_VESSELS: List[Vessel] = [
         lat=-0.62,
         lon=-90.40,
         speed_knots=2.9,            # Fischerei-Tempo, aber sonst sauber
-        in_protected_area=False,
         ais_gap_hours=0,
         flag="HKG",
         loitering_hours=0,
     ),
 ]
+
+# Das Schutzgebiets-Flag echt berechnen: einmal beim Import, aus den Koordinaten.
+# Die Engine bekommt damit ein fertiges Vessel-Objekt und kennt keine Geometrie.
+for _v in _SAMPLE_VESSELS:
+    _v.in_protected_area = is_in_protected_area(_v.lat, _v.lon)
 
 
 class SyntheticVesselSource:
