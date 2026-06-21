@@ -5,8 +5,9 @@ Dieses Modul spricht die "GFW DATA API" v0.3.0 an - das ist *Global Forest Watch
 (Wald-, Raster-, Vektordaten + Schutzgebiete), NICHT *Global Fishing Watch*.
 Diese API liefert KEINE Schiffspositionen/AIS. Schiffsdaten kommen aus einer
 getrennten Quelle (siehe gfw_vessels.py / AIS-Provider). Dieses Modul wird hier
-ausschliesslich genutzt, um echte WDPA-Schutzgebiets-Geometrien fuer
-`is_in_protected_area` abzufragen.
+ausschliesslich genutzt, um echte WDPA-Schutzgebiets-Polygone fuer eine bbox
+abzufragen (fetch_protected_areas_geojson) - geo.py baut daraus die
+Punkt-in-Schutzgebiet-Pruefung.
 
 Auth (laut Spec, securitySchemes):
   - API-Key im Header ODER Query-Param "x-api-key" (APIKeyOriginHeader/Query).
@@ -150,6 +151,8 @@ def _get(path: str, params: Dict[str, Any], require_key: bool = True) -> Dict[st
 # --------------------------------------------------------------------------- #
 # list_datasets - Hilfsfunktion, um den echten WDPA-Dataset-Namen zu finden
 # --------------------------------------------------------------------------- #
+# Dev-Helfer: NICHT im Request-Pfad. Dient nur dazu, den korrekten WDPA-Dataset-
+# Slug/-Version zu ermitteln (siehe WDPA_DATASET oben). Bewusst behalten.
 
 
 def list_datasets(page_size: int = 100) -> List[Dict[str, Any]]:
@@ -222,49 +225,3 @@ def fetch_protected_areas_geojson(bbox: Tuple[float, float, float, float]) -> Di
             "geometry": geometry,
         })
     return {"type": "FeatureCollection", "features": features}
-
-
-# --------------------------------------------------------------------------- #
-# is_in_protected_area - echte WDPA-Abfrage per SQL
-# --------------------------------------------------------------------------- #
-
-
-def _build_point_in_protected_sql(lat: float, lon: float) -> str:
-    """Baut das SQL fuer eine Punkt-in-Schutzgebiet-Abfrage.
-
-    ====================================================================== #
-    >>> An echtes WDPA-Dataset/-Schema anpassen <<<
-    ====================================================================== #
-    Spaltennamen (WDPA_GEOM_COLUMN) und ggf. die raeumliche Funktion haengen vom
-    Dataset ab. ST_Intersects/ST_Point sind ueblich; verifiziere die unterstuetzte
-    SQL-Syntax in der Doku bzw. ueber GET /dataset/{dataset}/{version}/fields.
-    Hinweis: GeoJSON/PostGIS nutzen die Reihenfolge (lon, lat).
-    """
-    return (
-        f"SELECT 1 FROM data "
-        f"WHERE ST_Intersects({WDPA_GEOM_COLUMN}, ST_SetSRID(ST_Point({lon}, {lat}), 4326)) "
-        f"LIMIT 1"
-    )
-
-
-def is_in_protected_area(lat: float, lon: float) -> bool:
-    """True, wenn (lat, lon) laut WDPA-Daten der GFW Data API in einem Schutzgebiet liegt.
-
-    Fragt /dataset/{dataset}/{version}/query/json mit einem Punkt-SQL ab. Liefert
-    die Query mindestens eine Zeile, liegt der Punkt in einem Schutzgebiet.
-
-    Hinweis: Dies ist die ALTERNATIVE zu der lokalen GeoJSON-Pruefung in geo.py.
-    Welche Quelle is_in_protected_area letztlich speist, entscheidest du beim
-    Verdrahten - die Risk Engine merkt davon nichts.
-    """
-    sql = _build_point_in_protected_sql(lat, lon)
-    path = f"/dataset/{WDPA_DATASET}/{WDPA_VERSION}/query/json"
-    payload = _get(path, params={"sql": sql})
-
-    # Antwort ist typischerweise {"data": [...]} - mind. eine Zeile => im Gebiet.
-    data = payload.get("data", payload)
-    if isinstance(data, list):
-        return len(data) > 0
-    raise GfwDataApiError(
-        "Unerwartetes Antwortformat der Query - konnte Ergebniszeilen nicht lesen."
-    )
