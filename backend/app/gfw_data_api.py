@@ -45,17 +45,17 @@ GFW_DATA_API_BASE = os.environ.get(
 HTTP_TIMEOUT_SECONDS = float(os.environ.get("GFW_HTTP_TIMEOUT", "30"))
 
 # ========================================================================== #
-# >>> An echtes WDPA-Dataset anpassen, siehe GET /datasets (list_datasets()) <<<
-# ========================================================================== #
-# Die Spec nennt zwar das Raster-Feld "wdpa_protected_areas__iucn_cat" und einen
-# WdpaAreoOfInterest-Typ (wdpa_id), aber NICHT den exakten Dataset-Namen/-Version
-# der WDPA-POLYGONE. Diese drei Konstanten sind PLATZHALTER - finde die echten
-# Werte mit list_datasets() und trage sie hier ein.
-WDPA_DATASET = os.environ.get("GFW_WDPA_DATASET", "wdpa_protected_areas")   # ANPASSEN
-WDPA_VERSION = os.environ.get("GFW_WDPA_VERSION", "latest")                 # ANPASSEN
-# Name der Geometrie-Spalte im Dataset (haeufig "geom"). ANPASSEN gemaess
-# GET /dataset/{dataset}/{version}/fields.
-WDPA_GEOM_COLUMN = os.environ.get("GFW_WDPA_GEOM_COLUMN", "geom")           # ANPASSEN
+# Verifiziert gegen die Live-API (Stand 2026-06) via list_datasets() und
+# GET /dataset/wdpa_protected_areas/v202512/fields:
+#   - Dataset "wdpa_protected_areas" existiert (globales WDPA, Polygone)
+#   - Geometrie-Spalte heisst "geom"
+#   - Punkt-in-Polygon-Query liefert plausible Ergebnisse (Galapagos-Reserve=True,
+#     offener Pazifik=False)
+# Version: GFW veroeffentlicht periodisch neue Versionen (vYYYYMM...). Aktuellste
+# mit list-versions ermitteln (GET /dataset/wdpa_protected_areas) und ggf. bumpen.
+WDPA_DATASET = os.environ.get("GFW_WDPA_DATASET", "wdpa_protected_areas")
+WDPA_VERSION = os.environ.get("GFW_WDPA_VERSION", "v202512")
+WDPA_GEOM_COLUMN = os.environ.get("GFW_WDPA_GEOM_COLUMN", "geom")
 
 
 class GfwDataApiError(RuntimeError):
