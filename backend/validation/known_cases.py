@@ -64,8 +64,9 @@ KNOWN_CASES: list[KnownCase] = [
         approximate=True,
         # Sea Shepherd "Operation Icefish" 2014/15 (110-Tage-Verfolgung);
         # Interpol Purple Notice; I. Urbina, "The Outlaw Ocean" (2019).
-        source="Sea Shepherd Operation Icefish; Interpol Purple Notice; "
-               "Urbina, The Outlaw Ocean (2019).",
+        source="Sea Shepherd Operation Icefish 2015; Interpol Purple Notice; "
+               "Urbina, The Outlaw Ocean (2019). "
+               "https://www.seashepherd.org/campaigns/operation-icefish/",
         notes="Verhalten gut dokumentiert (AIS aus, Fischerei im Sperrgebiet); "
               "exakte Knoten/Stunden approximiert.",
     ),
@@ -86,7 +87,9 @@ KNOWN_CASES: list[KnownCase] = [
         expected_high_risk=True,
         approximate=True,
         # Interpol Purple Notice; 2016 von Indonesien (KKP) gestellt und versenkt.
-        source="Interpol Purple Notice; Indonesia KKP 2016 (vessel sunk).",
+        source="Interpol Purple Notice (5 Jahre auf der Flucht, mehrfach "
+               "umgeflaggt); Indonesia KKP 2016 (vessel sunk). "
+               "https://newint.org/features/2016/06/01/end-of-the-line",
         notes="Wechselnde Namen/Flaggen dokumentiert; AIS-Werte approximiert.",
     ),
     # ----------------------------------------------------------------------- #
@@ -107,7 +110,9 @@ KNOWN_CASES: list[KnownCase] = [
         approximate=True,
         # CCAMLR IUU-Liste; 2015 in Thailand/Senegal-Kontext mehrfach detained;
         # mehrere Identitaeten dokumentiert.
-        source="CCAMLR IUU vessel list; 2015 detentions (multiple identities).",
+        source="Interpol Purple Notice 2015 (AIS-Manipulation dokumentiert); "
+               "CCAMLR IUU vessel list; 2015 detentions (multiple identities). "
+               "https://www.interpol.int/en/News-and-Events/News/2015/",
         notes="Identitaetswechsel dokumentiert; AIS-Werte approximiert.",
     ),
     # ----------------------------------------------------------------------- #

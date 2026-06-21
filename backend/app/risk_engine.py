@@ -103,7 +103,9 @@ def rule_fishing_speed(v: Vessel) -> Optional[RiskReason]:
     """Geschwindigkeiten von 2-5 kn sind typisch fuer aktive Fischerei."""
     if 2.0 <= v.speed_knots <= 5.0:
         return RiskReason(
-            points=20,
+            # erhoeht 20->25: seltenes Signal (10x in 100 echten Schiffen),
+            # daher trennschaerfer (Kalibrierung gg. echte GFW-Verteilung).
+            points=25,
             label="Fischerei-Tempo",
             detail=(
                 f"Geschwindigkeit {v.speed_knots:.1f} kn liegt im typischen "
@@ -145,14 +147,51 @@ def rule_ais_gap(v: Vessel) -> Optional[RiskReason]:
 
 def rule_loitering(v: Vessel) -> Optional[RiskReason]:
     """Langes Verweilen auf engem Raum deutet auf Fang/Umladen statt Transit."""
-    if v.loitering_hours >= 6:
+    # Schwelle 6h->12h gesenkt UND Gewicht 15->10: feuerte bei ~50% echter
+    # Schiffe -> zu wenig Diskriminierung (Grundrauschen). Strengere Schwelle +
+    # niedrigeres Gewicht (Kalibrierung gg. echte GFW-Verteilung).
+    if v.loitering_hours >= 12:
         return RiskReason(
-            points=15,
-            label="Verweilen >=6h",
+            points=10,
+            label="Verweilen >=12h",
             detail=(
                 f"Das Schiff verweilt seit {v.loitering_hours:.0f}h auf engem "
                 "Raum. Anhaltendes Loitering deutet auf Fang oder Umladung "
                 "(Transshipment) hin, nicht auf Durchfahrt."
+            ),
+        )
+    return None
+
+
+# Flags of Convenience: in IUU-Listen ueberproportional vertreten.
+# Quelle: FAO IUU Vessel List; Trygg Mat Tracking (TMT).
+# Beide ISO-Schreibweisen, weil GFW 3-stellige Codes (NGA/PAN) liefert, die
+# Anker/Listen teils 2-stellige (NG/PA) - sonst wuerde die Regel auf echten
+# Daten nie feuern.
+FLAGS_OF_CONVENIENCE = {
+    "NGA", "NG",   # Nigeria
+    "GNQ", "GQ",   # Aequatorialguinea
+    "TGO", "TG",   # Togo
+    "BLZ", "BZ",   # Belize
+    "PAN", "PA",   # Panama
+    "COM", "KM",   # Komoren
+    "STP", "ST",   # Sao Tome und Principe
+}
+
+
+def rule_flag_of_convenience(v: Vessel) -> Optional[RiskReason]:
+    """Bekannte Billigflaggen, die in IUU-Faellen ueberproportional auftauchen."""
+    # neue Regel (+20): Flags of Convenience korrelieren mit IUU-Fischerei
+    # (FAO IUU Vessel List, Trygg Mat Tracking). Kalibrierung: ergaenzt ein
+    # identitaetsbasiertes Signal, das Speed/Gap-Regeln nicht abdecken.
+    if v.flag and v.flag.upper() in FLAGS_OF_CONVENIENCE:
+        return RiskReason(
+            points=20,
+            label="Billigflagge",
+            detail=(
+                f"Flagge {v.flag} zaehlt zu den 'Flags of Convenience', die in "
+                "IUU-Listen (FAO, Trygg Mat Tracking) stark ueberrepraesentiert "
+                "sind - ein identitaetsbasiertes Risikosignal."
             ),
         )
     return None
@@ -165,6 +204,7 @@ RULES: List[Rule] = [
     rule_fishing_speed,
     rule_ais_gap,
     rule_loitering,
+    rule_flag_of_convenience,
 ]
 
 
