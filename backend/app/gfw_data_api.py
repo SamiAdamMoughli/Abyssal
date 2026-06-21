@@ -188,8 +188,11 @@ def fetch_protected_areas_geojson(bbox: Tuple[float, float, float, float]) -> Di
     """
     min_lon, min_lat, max_lon, max_lat = bbox
     envelope = f"ST_MakeEnvelope({min_lon},{min_lat},{max_lon},{max_lat},4326)"
+    # Felder verifiziert via GET /dataset/.../fields: name, iucn_cat, gis_area
+    # (km²), site_id (WDPA-Kennung).
     sql = (
-        f"SELECT name, iucn_cat, ST_AsGeoJSON({WDPA_GEOM_COLUMN}) AS geojson "
+        f"SELECT name, iucn_cat, gis_area, site_id, "
+        f"ST_AsGeoJSON({WDPA_GEOM_COLUMN}) AS geojson "
         f"FROM data WHERE ST_Intersects({WDPA_GEOM_COLUMN}, {envelope})"
     )
     path = f"/dataset/{WDPA_DATASET}/{WDPA_VERSION}/query/json"
@@ -207,9 +210,15 @@ def fetch_protected_areas_geojson(bbox: Tuple[float, float, float, float]) -> Di
             geometry = json.loads(raw)
         except (TypeError, ValueError):
             continue  # defekte Geometrie ueberspringen statt crashen
+        area = row.get("gis_area")
         features.append({
             "type": "Feature",
-            "properties": {"name": row.get("name"), "iucn_cat": row.get("iucn_cat")},
+            "properties": {
+                "name": row.get("name"),
+                "iucn_cat": row.get("iucn_cat"),
+                "area_km2": round(float(area)) if area is not None else None,
+                "wdpa_id": row.get("site_id"),
+            },
             "geometry": geometry,
         })
     return {"type": "FeatureCollection", "features": features}

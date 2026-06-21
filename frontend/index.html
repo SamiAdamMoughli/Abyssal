@@ -288,7 +288,51 @@
       .count { display: none; }
       #search-btn { width: calc(100% - 24px); height: 48px; font-size: 18px; }
       .card { padding: 9px 10px; }
+      .toggle-group { display: none; }
     }
+
+    /* ---------------- LAYER TOGGLE (Topbar) ---------------- */
+    .toggle-group { display: flex; gap: 0; }
+    .toggle-btn {
+      font-family: "Bebas Neue", sans-serif; font-size: 14px; letter-spacing: 1px;
+      padding: 4px 11px; cursor: pointer; line-height: 1.3;
+      background: transparent; color: var(--ss-orange);
+      border: 1px solid var(--ss-orange); border-right: none;
+      transition: background var(--t), color var(--t);
+    }
+    .toggle-btn:last-child { border-right: 1px solid var(--ss-orange); }
+    .toggle-btn.active { background: var(--ss-orange); color: var(--ss-black); }
+
+    /* In-MPA badge (sidebar card + popup) */
+    .mpa-flag {
+      display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 0.5px;
+      padding: 1px 6px; border-radius: 2px; margin-top: 6px;
+      background: var(--ss-orange); color: var(--ss-black);
+    }
+    .pop-mpa {
+      display: inline-block; margin-top: 8px; padding: 2px 8px; border-radius: 2px;
+      font-family: "Bebas Neue", sans-serif; font-size: 13px; letter-spacing: 1px;
+      background: var(--ss-red); color: var(--ss-white);
+    }
+
+    /* MPA polygon popup */
+    .mpa-popup { font-family: "Montserrat", sans-serif; color: var(--ss-white); }
+    .mpa-name {
+      font-family: "Bebas Neue", sans-serif; font-size: 16px;
+      color: var(--ss-cyan); letter-spacing: 1px;
+    }
+    .mpa-cat, .mpa-area { font-size: 11px; opacity: 0.6; }
+
+    /* MPA loading indicator (bottom-left) */
+    #mpa-loading {
+      position: absolute; left: 12px; bottom: 26px; z-index: 700; display: none;
+      font-family: "Montserrat", sans-serif; font-size: 11px; color: var(--ss-cyan);
+      background: var(--ss-black); padding: 3px 9px; border: 1px solid var(--ss-teal);
+    }
+    #mpa-loading.show { display: block; }
+
+    /* MPA polygon fade-in */
+    .leaflet-interactive { transition: fill-opacity 350ms ease, stroke-opacity 350ms ease; }
   </style>
 </head>
 
@@ -300,7 +344,12 @@
       <div class="subtitle">MISSION RADAR</div>
       <div class="topbar-spacer"></div>
       <div id="status-pill" class="pill syn"><span class="dot"></span><span id="status-text">CONNECTING</span></div>
-      <div class="count"><b id="vessel-count">—</b> VESSELS</div>
+      <div class="toggle-group">
+        <button class="toggle-btn" data-mode="vessels">🚢 VESSELS</button>
+        <button class="toggle-btn" data-mode="mpas">🛡 MPAs</button>
+        <button class="toggle-btn active" data-mode="both">⊕ BOTH</button>
+      </div>
+      <div class="count"><b id="vessel-count">—</b> vessels<span id="mpa-count"></span></div>
     </header>
 
     <!-- SIDEBAR -->
@@ -323,6 +372,7 @@
   <button id="search-btn">🔍 SEARCH THIS AREA</button>
   <div id="area-warn">⚠ LARGE AREA — results may be slow or limited. Zoom in for best results.</div>
   <div id="error-banner"></div>
+  <div id="mpa-loading">◈ Loading protected areas…</div>
 
   <script>
     // ==================================================================
@@ -362,7 +412,12 @@
       attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 19
     }).addTo(map);
 
-    const markerLayer = L.layerGroup().addTo(map);
+    // Farben aus den CSS-Variablen lesen (einzige Farbquelle, kein JS-Hex)
+    const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+    const markerLayer = L.layerGroup().addTo(map);   // Schiffe
+    const ringLayer = L.layerGroup().addTo(map);     // orange Ringe (in MPA)
+    const mpaLayer = L.layerGroup().addTo(map);      // Schutzgebiets-Polygone
     const markersByMmsi = {};
 
     function radiusFor(v) {
@@ -374,6 +429,14 @@
     function vesselMarker(v) {
       const cls = riskClass(v.score);
       const d = Math.round(2 * radiusFor(v));
+      // Schiff IN Schutzgebiet -> zusaetzlicher orangefarbener gestrichelter Ring
+      // (circleMarker = pixelbasiert, Radius = Marker-Radius * 3, mitzoomend)
+      if (v.in_protected_area) {
+        L.circleMarker([v.lat, v.lon], {
+          radius: radiusFor(v) * 3,
+          color: css('--ss-orange'), weight: 1, fillOpacity: 0, dashArray: '3 3'
+        }).addTo(ringLayer);
+      }
       const icon = L.divIcon({
         className: '',
         html: `<div class="vmarker ${cls}" style="width:${d}px;height:${d}px"><span class="vdot"></span></div>`,
@@ -387,10 +450,12 @@
       const cls = riskClass(v.score);
       const rules = (v.reasons || []).map(r =>
         `<li><span class="b">▸ ${r.label} +${r.points}</span><br>${r.detail || ''}</li>`).join('');
+      const mpaBadge = v.in_protected_area ? `<div class="pop-mpa">⚠ IN PROTECTED AREA</div>` : '';
       return `
         <div class="pop-name">${v.name}</div>
         <div class="pop-score ${cls}">${v.score.toFixed(1)}</div>
         <div class="pop-mmsi">MMSI ${v.mmsi} · ${flagEmoji(v.flag)} ${v.flag} · ${v.speed_knots.toFixed(1)} KN</div>
+        ${mpaBadge}
         ${rules ? `<ul class="pop-rules">${rules}</ul>` : `<div class="pop-mmsi" style="margin-top:8px">No risk reasons.</div>`}
       `;
     }
@@ -434,7 +499,8 @@
             <span>${v.speed_knots.toFixed(1)} kn</span><span class="sep">/</span>
             <span>${reason}</span>
           </div>
-          ${badges ? `<div class="rule-badges">${badges}</div>` : ''}`;
+          ${badges ? `<div class="rule-badges">${badges}</div>` : ''}
+          ${v.in_protected_area ? `<div class="mpa-flag">🛡 IN MPA</div>` : ''}`;
         c.appendChild(card);
       });
     }
@@ -502,16 +568,25 @@
         if (!health) setStatus(vData.source);
 
         markerLayer.clearLayers();
+        ringLayer.clearLayers();
         Object.keys(markersByMmsi).forEach(k => delete markersByMmsi[k]);
         vData.vessels.forEach(v => {
-          const m = vesselMarker(v); m.addTo(markerLayer);
+          const m = vesselMarker(v); m.addTo(markerLayer);   // setzt auch In-MPA-Ring
           markersByMmsi[v.mmsi] = { marker: m, latlng: [v.lat, v.lon] };
         });
 
         renderCards(tData.targets && tData.targets.length ? tData.targets : vData.vessels);
+
+        // Zaehler: Schiffe gesamt + wie viele IN Schutzgebieten
+        const inMpa = vData.vessels.filter(v => v.in_protected_area).length;
         document.getElementById('vessel-count').textContent = vData.count;
+        document.getElementById('mpa-count').innerHTML =
+          inMpa ? ` · <b>${inMpa} IN MPAs</b>` : '';
         document.getElementById('sidebar-sub').textContent =
           `Ranked by risk score · ${vData.count} vessels`;
+
+        // Schutzgebiets-Layer fuer dieselbe Region laden (parallel, nicht blockierend)
+        loadMPAs(params);
 
         // URL-Hash fuer teilbare Links
         if (params) {
@@ -529,6 +604,56 @@
         setButtonLoading(false);
       }
     }
+
+    // ==================================================================
+    // MPA-LAYER (Schutzgebiete)
+    // ==================================================================
+    function mpaLoading(on) { document.getElementById('mpa-loading').classList.toggle('show', on); }
+
+    async function loadMPAs(params) {
+      mpaLoading(true);
+      try {
+        const qs = buildQuery(params);   // gleiche bbox wie die Schiffe
+        const res = await fetch(`${API_URL}/api/protected-areas?${qs}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        mpaLayer.clearLayers();
+        L.geoJSON(data, {
+          style: {
+            color: css('--ss-cyan'), weight: 1.5, opacity: 0.8,
+            fillColor: css('--ss-cyan'), fillOpacity: 0.06, dashArray: '4 4'
+          },
+          onEachFeature: (feature, layer) => {
+            const p = feature.properties || {};
+            layer.bindPopup(`
+              <div class="mpa-popup">
+                <div class="mpa-name">${p.name || 'Protected Area'}</div>
+                <div class="mpa-cat">IUCN Category: ${p.iucn_cat || '?'}</div>
+                <div class="mpa-area">${p.area_km2 != null ? p.area_km2.toLocaleString() : '?'} km²</div>
+              </div>`);
+          }
+        }).addTo(mpaLayer);
+      } catch (e) {
+        // MPA-Layer ist optional - Fehler nicht eskalieren, nur Konsole.
+        console.warn('MPA layer failed:', e.message);
+      } finally {
+        mpaLoading(false);
+      }
+    }
+
+    // ==================================================================
+    // LAYER-TOGGLE  (Vessels / MPAs / Both)
+    // ==================================================================
+    function applyMode(mode) {
+      const showV = mode === 'vessels' || mode === 'both';
+      const showM = mode === 'mpas' || mode === 'both';
+      [markerLayer, ringLayer].forEach(l => showV ? map.addLayer(l) : map.removeLayer(l));
+      showM ? map.addLayer(mpaLayer) : map.removeLayer(mpaLayer);
+      document.querySelectorAll('.toggle-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.mode === mode));
+    }
+    document.querySelectorAll('.toggle-btn').forEach(btn =>
+      btn.onclick = () => applyMode(btn.dataset.mode));
 
     // ==================================================================
     // SEARCH THIS AREA

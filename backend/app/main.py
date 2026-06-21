@@ -255,15 +255,26 @@ def get_protected_areas(
 
     Optional bbox: laedt WDPA-Polygone fuer die gewaehlte Region (passend zur
     Schiffs-Abfrage). Ohne bbox bleibt die Env-Default-Region.
-    Fehler der Geo-Quelle werden als HTTP 502 gemeldet, nie still verschluckt.
+
+    Fallback: liefert die GFW-Data-API keine Polygone (Ausfall/leer), wird die
+    lokale Platzhalter-GeoJSON zurueckgegeben (auf die bbox gefiltert). So bleibt
+    der Karten-Layer auch bei API-Ausfall nutzbar (Option A als Sicherheitsnetz).
     """
     bbox, _, _ = parse_region(min_lat, max_lat, min_lon, max_lon, None, None)
     if bbox is not None:
         geo.set_area(bbox)
-    try:
-        return geo.get_protected_areas_geojson()
-    except Exception as exc:  # z. B. GfwDataApiError bei Quelle "gfw"
-        raise HTTPException(
-            status_code=502,
-            detail=f"Schutzgebiets-Daten konnten nicht geladen werden: {exc}",
-        ) from exc
+
+    fc = geo.get_protected_areas_geojson()   # gfw oder local, graceful
+    source = "gfw" if geo._source() == "gfw" else "local"
+    if not fc.get("features"):
+        # GFW lieferte nichts (Ausfall ODER Region ohne MPA) -> lokaler Fallback.
+        fallback = geo.local_protected_areas(bbox)
+        if fallback.get("features"):
+            fc = fallback
+            source = "local-fallback"
+    return {
+        "type": fc.get("type", "FeatureCollection"),
+        "features": fc.get("features", []),
+        "source": source,
+        "count": len(fc.get("features", [])),
+    }

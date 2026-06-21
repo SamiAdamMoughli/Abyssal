@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from dotenv import load_dotenv
-from shapely.geometry import Point, shape
+from shapely.geometry import Point, box, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
@@ -141,6 +141,33 @@ def get_protected_areas_geojson() -> Dict[str, Any]:
     """Liefert die geladene FeatureCollection - fuer den Karten-Layer im Frontend."""
     _load()
     return _protected_fc or {"type": "FeatureCollection", "features": []}
+
+
+def local_protected_areas(
+    bbox: Optional[Tuple[float, float, float, float]] = None,
+) -> Dict[str, Any]:
+    """Laedt die LOKALE Platzhalter-GeoJSON (Fallback, wenn die GFW-Data-API
+    nicht verfuegbar ist). Bei gegebener bbox werden nur Polygone zurueck-
+    gegeben, die den Ausschnitt schneiden - so erscheinen keine ortsfremden
+    (z. B. Galapagos-) Polygone in anderen Regionen.
+    """
+    if not DATA_PATH.exists():
+        return {"type": "FeatureCollection", "features": []}
+    with open(DATA_PATH, "r", encoding="utf-8") as fh:
+        fc = json.load(fh)
+    features = fc.get("features", [])
+    if bbox is not None:
+        env = box(bbox[0], bbox[1], bbox[2], bbox[3])  # (minlon,minlat,maxlon,maxlat)
+        kept = []
+        for f in features:
+            geom = f.get("geometry")
+            try:
+                if geom and shape(geom).intersects(env):
+                    kept.append(f)
+            except (ValueError, AttributeError):
+                continue
+        features = kept
+    return {"type": "FeatureCollection", "features": features}
 
 
 def reset_cache() -> None:
