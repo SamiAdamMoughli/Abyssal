@@ -40,7 +40,10 @@ Abyssal/
 │   └── app/
 │       ├── risk_engine.py   # Herzstück: Regeln, Vessel, Scoring, rank_targets
 │       ├── sample_data.py   # austauschbare Datenquelle (synthetisch)
+│       ├── geo.py           # Geo-Logik: Punkt-in-Schutzgebiet (shapely/geopandas)
 │       └── main.py          # FastAPI-Endpunkte (dünn, ohne Fachlogik)
+│   └── data/
+│       └── protected_areas.geojson  # Schutzgebiets-Polygone (Platzhalter)
 ├── frontend/
 │   └── index.html           # Leaflet-Karte + Target-Liste, kein Build-Step
 └── README.md
@@ -50,7 +53,7 @@ Abyssal/
 
 ## Setup
 
-Voraussetzung: **Python 3.14** (siehe [.python-version](.python-version)).
+Voraussetzung: **Python 3.14** (siehe [.python-version](.python-version)). Abhängigkeiten in [backend/requirements.txt](backend/requirements.txt) (`pip install -r requirements.txt`).
 
 ```bash
 # 1. ins Backend wechseln
@@ -61,7 +64,7 @@ python3 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 
 # 3. Abhängigkeiten
-pip install fastapi uvicorn
+pip install -r requirements.txt
 
 # 4. API starten (aus dem Ordner backend/)
 uvicorn app.main:app --reload
@@ -75,9 +78,81 @@ Die API läuft dann auf <http://localhost:8000>.
 | `GET /api/targets` | Top-N Ziele mit Begründung (gerankt)           |
 | `GET /api/vessels` | alle Schiffe mit Score (für die Karte)         |
 
+Beide `/api/*`-Endpunkte akzeptieren `?source=synthetic` (Default) oder `?source=gfw`.
+
 **Frontend:** [frontend/index.html](frontend/index.html) im Browser öffnen
 (Doppelklick reicht — CORS ist offen). Ist das Backend nicht gestartet, zeigt die
 Seite eine klare Fehlermeldung statt einer leeren Karte.
+
+---
+
+## Datenquellen: synthetisch vs. Global Fishing Watch
+
+Mission Radar kann zwischen zwei Datenquellen umschalten — die Risk Engine bleibt
+dabei identisch, sie bekommt in beiden Fällen fertige `Vessel`-Objekte:
+
+| Quelle      | Modul                                      | Token nötig? |
+| ----------- | ------------------------------------------ | ------------ |
+| `synthetic` | [sample_data.py](backend/app/sample_data.py) | nein (Default) |
+| `gfw`       | [gfw_vessels.py](backend/app/gfw_vessels.py) | ja           |
+
+**Welche GFW-API?** Die Schiffs-/AIS-Daten liegen in der **Global Fishing Watch
+API v3** (`gateway.api.globalfishingwatch.org/v3`) — Endpunkte für **Vessels**,
+**Events** (u. a. `gap`/AIS-off und `loitering`) und **4Wings** (Präsenz/Effort).
+Das ist **nicht** die Global *Forest* Watch *Data* API (`gfw_data_api.py`, nur
+Schutzgebiete). [gfw_vessels.py](backend/app/gfw_vessels.py) leitet `ais_gap_hours`
+aus GAP-Events und `loitering_hours` aus LOITERING-Events ab — genau die Felder,
+die die Risk-Regeln speisen.
+
+**Umschalten** — pro Request oder global:
+
+```bash
+# pro Request (Query-Parameter)
+curl "http://localhost:8000/api/targets?source=gfw"
+
+# global per Umgebungsvariable (neuer Default)
+export DATA_SOURCE=gfw
+```
+
+Bei `gfw` wird eine Default-bbox (grob Galápagos) und ein Default-Zeitfenster der
+letzten 48 h verwendet — beides per `GFW_BBOX` / `GFW_LOOKBACK_HOURS` (oder
+`GFW_START`/`GFW_END`) konfigurierbar. Ohne Token läuft alles unverändert im
+synthetischen Default weiter; eine GFW-Anfrage ohne gültigen Token scheitert
+**klar** (HTTP 502 mit Klartext), nie still. Bei Rate-Limit meldet das Modul HTTP
+429 mit `Retry-After`.
+
+### GFW-Token besorgen und setzen
+
+1. Token im GFW-Portal anlegen (Forschungs-/Non-Profit-Zugang) über
+   <https://globalfishingwatch.org/our-apis/tokens>.
+2. `.env` anlegen und Token eintragen — **niemals committen** (`.env` steht in
+   `.gitignore`):
+   ```bash
+   cp .env.example .env
+   # in .env: GFW_API_TOKEN=...
+   ```
+   Der Token wird ausschließlich aus der Umgebungsvariable `GFW_API_TOKEN`
+   gelesen, nie aus dem Code.
+
+> ⚠️ **Vor dem echten Einsatz prüfen:** Endpunkte und Auth in
+> [gfw_vessels.py](backend/app/gfw_vessels.py) sind gegen die offizielle Doku
+> verifiziert (Base-URL, `Bearer`-Auth, `GET /vessels/search`, `GET/POST /events`,
+> Dataset `public-global-fishing-events:latest`). **Nicht** eindeutig aus der Doku
+> ableitbar und daher mit `>>> an echte GFW-Antwort anpassen <<<` markiert: die
+> exakten `type`-Enum-Werte für GAP/LOITERING, die POST-Body-Syntax des
+> Geometrie-Filters und einige Feldpfade im Mapping. Diese gegen eine echte
+> Antwort verifizieren: <https://globalfishingwatch.org/our-apis/documentation>.
+> Fehlende Felder fallen auf konservative Defaults (0.0) zurück.
+> `in_protected_area` kommt **nicht** von GFW, sondern aus
+> [geo.py](backend/app/geo.py).
+
+<!-- -->
+
+> ℹ️ **AIS ist kein perfektes Signal:** AIS-Daten haben **Latenz und Lücken**
+> (Abdeckung, abgeschaltete Transponder, Satelliten-Revisit). Der Risk Score
+> bleibt damit eine **Hypothese**, bis er gegen Ground Truth validiert ist (siehe
+> Abschnitt „Validierung"). Echte Daten machen den Score nicht automatisch wahr —
+> nur überprüfbar.
 
 ---
 
@@ -129,6 +204,84 @@ Fertig. **Kein anderer Code wird angefasst.** Die Engine, die API und das Fronte
 
 Score = Summe aller zutreffenden Begründungen, **gedeckelt bei 100**. Schiffe ohne
 eine einzige Begründung erscheinen nicht in der Ziel-Liste.
+
+---
+
+## Schutzgebiete (`in_protected_area`)
+
+Das Flag `in_protected_area` wird **geometrisch berechnet**, nicht hartkodiert:
+[geo.py](backend/app/geo.py) lädt die Schutzgebiets-Polygone aus
+[backend/data/protected_areas.geojson](backend/data/protected_areas.geojson)
+(einmalig, Modul-Level-Cache) und prüft mit shapely, ob die Schiffsposition darin
+liegt. Diese Geo-Logik ist bewusst von der Risk Engine getrennt — die Engine
+bekommt nur den fertigen Boolean und weiß nichts über Geometrie.
+
+> ⚠️ Die mitgelieferte GeoJSON ist **nur ein Platzhalter** mit erfundenen Polygonen,
+> die zur synthetischen Testszene passen. Sie hat keinerlei reale Bedeutung.
+
+**Echte Daten:** Die maßgebliche Quelle für Meeresschutzgebiete ist die
+**World Database on Protected Areas (WDPA)**, bereitgestellt über
+**Protected Planet** — <https://www.protectedplanet.net>. Für den echten Einsatz
+wird `protected_areas.geojson` durch einen WDPA-Export der relevanten Gebiete
+ersetzt; an `geo.py` und der Engine ändert sich dabei nichts.
+
+### Variante: WDPA live über die Global Forest Watch Data API
+
+Statt eines lokalen GeoJSON-Exports kann WDPA auch live abgefragt werden — über die
+**Global Forest Watch *Data* API** (`gfw-data-api`, v0.3.0). Das Modul
+[gfw_data_api.py](backend/app/gfw_data_api.py) kapselt das:
+`is_in_protected_area(lat, lon)` schickt ein Punkt-in-Polygon-SQL an
+`GET /dataset/{dataset}/{version}/query/json`.
+
+**Key besorgen** (laut Spec):
+
+1. `POST /auth/sign-up` (Name, E-Mail) → bestätigt deinen Zugang.
+2. `POST /auth/apikey` mit `alias`, `organization`, `email` und optional `domains`
+   (die Allowlist erlaubter `origin`-Werte).
+
+**Variablen setzen** (in `.env`, niemals committen):
+
+```bash
+GFW_API_KEY=...            # API-Key (Header/Query "x-api-key")
+GFW_API_ORIGIN=http://localhost   # muss zur domains-Allowlist des Keys passen
+```
+
+**Dataset finden — nicht raten:** Den exakten WDPA-Dataset-Namen und die Version
+kennt die Spec nicht. Liste die Datasets selbst auf und trage die Werte in
+`WDPA_DATASET` / `WDPA_VERSION` (oben in `gfw_data_api.py`, mit
+`>>> an echtes WDPA-Dataset anpassen <<<` markiert) ein:
+
+```python
+from app.gfw_data_api import list_datasets
+for d in list_datasets():
+    print(d.get("dataset"))   # nach dem WDPA-Eintrag suchen
+```
+
+> ⚠️ **Namensverwechslung — wichtig:** „GFW Data API" = **Global *Forest* Watch**
+> (Wald, Raster, Vektor, Schutzgebiete). Sie liefert **keine** Schiffspositionen.
+
+---
+
+## Schiffsdaten (AIS) — getrennte Quelle nötig
+
+Die oben genannte Global **Forest** Watch Data API hat keinerlei Schiffs-,
+AIS- oder Fishing-Effort-Endpunkte (alle 51 Pfade der Spec geprüft). **Schiffs­bewegungen
+brauchen daher eine eigene, getrennte Datenquelle.** Mission Radar trennt das sauber:
+
+| Frage | Quelle | Modul |
+| ----- | ------ | ----- |
+| Wo liegen Schutzgebiete? | WDPA (lokal **oder** GFW *Data* API) | [geo.py](backend/app/geo.py) / [gfw_data_api.py](backend/app/gfw_data_api.py) |
+| Wo sind welche Schiffe? | AIS / Global *Fishing* Watch | [gfw_client.py](backend/app/gfw_client.py) |
+
+Für echte Schiffsdaten kommen z. B. in Frage:
+
+- **Global *Fishing* Watch APIs** (apparent fishing effort, Vessel/Events) —
+  <https://globalfishingwatch.org/our-apis/documentation> — eine **andere** API als
+  die Forest-Watch-Data-API.
+- ein kommerzieller **AIS-Provider** (z. B. Satelliten-AIS).
+
+Die Risk Engine bleibt von all dem unberührt: Beide Welten liefern am Ende fertige
+`Vessel`-Objekte (inkl. des bereits berechneten `in_protected_area`-Flags).
 
 ---
 
