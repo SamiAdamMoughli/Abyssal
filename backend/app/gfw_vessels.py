@@ -245,14 +245,34 @@ def _event_duration_hours(event: Dict[str, Any]) -> float:
         return 0.0
 
 
+def _duration_from_field(value: Any, event: Dict[str, Any]) -> float:
+    """Dauer in Stunden aus einem expliziten GFW-Feld (kann str oder Zahl sein).
+
+    Verifiziert gegen die Live-API: gap-Events fuehren die Dauer in
+    event["gap"]["durationHours"], loitering-Events in
+    event["loitering"]["totalTimeHours"] - beides genauer als start/end.
+    Fehlt das Feld -> Fallback auf start/end. In jedem Fall auf
+    MAX_EVENT_DURATION_HOURS gedeckelt (lange Aggregat-Werte vermeiden).
+    """
+    if value is None:
+        return _event_duration_hours(event)
+    try:
+        hours = float(value)
+    except (ValueError, TypeError):
+        return _event_duration_hours(event)
+    return max(min(hours, MAX_EVENT_DURATION_HOURS), 0.0)
+
+
 def _vessels_from_events(events: List[Dict[str, Any]]) -> List[Vessel]:
     """Gruppiert Events pro Schiff und baut daraus Vessel-Objekte.
 
-    Feldpfade verifiziert gegen die Live-API:
+    Feldpfade verifiziert gegen die Live-API (rohe Event-JSON):
       - event["vessel"]: {id, name, ssvid, flag, type}  (ssvid = AIS-MMSI)
       - event["position"]: {lat, lon}
       - event["type"]: "fishing" | "gap" | "loitering" (klein)
-      - event["fishing"]["averageSpeedKnots"] (nur bei fishing-Events)
+      - event["fishing"]["averageSpeedKnots"]   (nur fishing-Events)
+      - event["gap"]["durationHours"]           (nur gap-Events)
+      - event["loitering"]["totalTimeHours"]    (nur loitering-Events)
     Fehlende Felder -> konservativer Default (kein erfundenes Risiko).
     """
     by_vessel: Dict[str, Dict[str, Any]] = {}
@@ -293,13 +313,19 @@ def _vessels_from_events(events: List[Dict[str, Any]]) -> List[Vessel]:
             slot["speed_knots"] = float(spd)
 
         # --- AIS-Luecke (gap) -> ais_gap_hours -------------------------------
-        # Laengste gap-Dauer im Fenster verwenden (konservativ-relevanteste Luecke).
+        # Echtes Feld: event["gap"]["durationHours"] (verifiziert). Laengste
+        # gap-Dauer im Fenster verwenden (konservativ-relevanteste Luecke).
         if ev_type == EVENT_TYPE_GAP:
-            slot["ais_gap_hours"] = max(slot["ais_gap_hours"], _event_duration_hours(ev))
+            gap = ev.get("gap") or {}
+            dur = _duration_from_field(gap.get("durationHours"), ev)
+            slot["ais_gap_hours"] = max(slot["ais_gap_hours"], dur)
 
         # --- Verweilen (loitering) -> loitering_hours ------------------------
+        # Echtes Feld: event["loitering"]["totalTimeHours"] (verifiziert).
         if ev_type == EVENT_TYPE_LOITERING:
-            slot["loitering_hours"] = max(slot["loitering_hours"], _event_duration_hours(ev))
+            loit = ev.get("loitering") or {}
+            dur = _duration_from_field(loit.get("totalTimeHours"), ev)
+            slot["loitering_hours"] = max(slot["loitering_hours"], dur)
 
     # In Vessel-Objekte ueberfuehren. Schiffe ohne Position auslassen (ohne
     # lat/lon kein Kartenpunkt und keine Schutzgebiets-Pruefung).

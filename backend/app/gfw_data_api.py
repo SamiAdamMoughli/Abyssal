@@ -52,6 +52,9 @@ HTTP_TIMEOUT_SECONDS = float(os.environ.get("GFW_HTTP_TIMEOUT", "30"))
 #   - Geometrie-Spalte heisst "geom"
 #   - Punkt-in-Polygon-Query liefert plausible Ergebnisse (Galapagos-Reserve=True,
 #     offener Pazifik=False)
+#   - Re-bestaetigt via GET /datasets (x-api-key): "wdpa_protected_areas" ist der
+#     Polygon-Slug; "wdpa_protected_areas__..." sind abgeleitete Alert-/Summary-
+#     Layer (NICHT die Schutzgebiets-Geometrie).
 # Version: GFW veroeffentlicht periodisch neue Versionen (vYYYYMM...). Aktuellste
 # mit list-versions ermitteln (GET /dataset/wdpa_protected_areas) und ggf. bumpen.
 WDPA_DATASET = os.environ.get("GFW_WDPA_DATASET", "wdpa_protected_areas")
