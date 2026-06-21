@@ -10,7 +10,7 @@ Start (aus dem Ordner backend/):
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -52,11 +52,55 @@ DEFAULT_DATA_SOURCE = os.environ.get("DATA_SOURCE", "synthetic")
 _synthetic_source = get_source()
 
 
-def resolve_source(name: str) -> VesselSource:
+Bbox = tuple  # (min_lon, min_lat, max_lon, max_lat)
+
+
+def parse_region(min_lat, max_lat, min_lon, max_lon, start_date, end_date):
+    """Validiert optionale bbox-/Datums-Parameter und baut (bbox, start, end).
+
+    - Werden NICHT alle vier bbox-Werte uebergeben -> bbox=None (Fallback Env).
+    - min_lat<max_lat und min_lon<max_lon, sonst HTTP 400.
+    - Datum YYYY-MM-DD -> ISO mit Zeit; nur eines gesetzt -> 400.
+    """
+    coords = [min_lat, max_lat, min_lon, max_lon]
+    given = [c for c in coords if c is not None]
+    bbox = None
+    if given:
+        if len(given) != 4:
+            raise HTTPException(
+                status_code=400,
+                detail="bbox unvollstaendig: min_lat,max_lat,min_lon,max_lon "
+                       "alle vier oder keinen angeben.",
+            )
+        if min_lat >= max_lat or min_lon >= max_lon:
+            raise HTTPException(
+                status_code=400,
+                detail="Ungueltige bbox: min_lat<max_lat und min_lon<max_lon "
+                       "erforderlich.",
+            )
+        # gfw_vessels erwartet (min_lon, min_lat, max_lon, max_lat)
+        bbox = (min_lon, min_lat, max_lon, max_lat)
+
+    start = end = None
+    if start_date or end_date:
+        if not (start_date and end_date):
+            raise HTTPException(
+                status_code=400,
+                detail="Zeitfenster unvollstaendig: start_date UND end_date "
+                       "angeben (YYYY-MM-DD).",
+            )
+        start = f"{start_date}T00:00:00Z"
+        end = f"{end_date}T23:59:59Z"
+
+    return bbox, start, end
+
+
+def resolve_source(name: str, bbox=None, start=None, end=None) -> VesselSource:
     """Waehlt die Datenquelle anhand des Namens ("synthetic" oder "gfw").
 
     GFW wird nur hier importiert/instanziiert, damit das System ohne installierte
-    GFW-Konfiguration im synthetischen Default voll funktioniert.
+    GFW-Konfiguration im synthetischen Default voll funktioniert. bbox/Zeitfenster
+    werden nur an die GFW-Quelle durchgereicht; synthetic ignoriert sie.
     """
     key = (name or DEFAULT_DATA_SOURCE).lower()
     if key == "synthetic":
@@ -66,25 +110,32 @@ def resolve_source(name: str) -> VesselSource:
         # Lazy import, damit das System ohne Token im synthetischen Default laeuft.
         from .gfw_vessels import get_gfw_source  # lazy import
 
-        return get_gfw_source()
+        # Schutzgebiets-Pruefung auf die GEWAEHLTE Region setzen (sonst wuerden
+        # in_protected_area-Flags ausserhalb der Default-Region falsch sein).
+        if bbox is not None:
+            geo.set_area(bbox)
+        return get_gfw_source(bbox=bbox, start=start, end=end)
     raise HTTPException(
         status_code=400,
         detail=f"Unbekannte Datenquelle '{name}'. Erlaubt: 'synthetic', 'gfw'.",
     )
 
 
-def _load_vessels(source: str):
+def _load_vessels(source: str, bbox=None, start=None, end=None):
     """Holt die Schiffe der gewaehlten Quelle und uebersetzt Quellen-Fehler sauber.
 
-    GFW-Probleme (Token, Netzwerk, HTTP) werden zu einem klaren HTTP 502 statt zu
-    einem Stacktrace - aber niemals stillschweigend verschluckt.
+    Zu grosse bbox -> HTTP 400 (Client). GFW-Probleme (Token, Netzwerk, HTTP) ->
+    HTTP 502 - aber niemals stillschweigend verschluckt.
     """
-    vessel_source = resolve_source(source)
+    vessel_source = resolve_source(source, bbox, start, end)
     try:
         return vessel_source.get_vessels()
     except HTTPException:
         raise
-    except Exception as exc:  # z. B. GfwApiError
+    except Exception as exc:  # z. B. GfwApiError, AreaTooLargeError
+        # Area-too-large ist ein Client-Fehler (400), kein Server-/Quellenfehler.
+        if type(exc).__name__ == "AreaTooLargeError":
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         raise HTTPException(
             status_code=502,
             detail=f"Datenquelle '{source}' fehlgeschlagen: {exc}",
@@ -148,9 +199,20 @@ _SOURCE_QUERY = Query(
 
 
 @app.get("/api/targets")
-def get_targets(top_n: int = 5, source: str = _SOURCE_QUERY) -> Dict[str, Any]:
+def get_targets(
+    top_n: int = 5,
+    source: str = _SOURCE_QUERY,
+    min_lat: Optional[float] = None,
+    max_lat: Optional[float] = None,
+    min_lon: Optional[float] = None,
+    max_lon: Optional[float] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> Dict[str, Any]:
     """Top-N Ziele mit Begruendung - gerankt nach Score absteigend."""
-    vessels = _load_vessels(source)
+    bbox, start, end = parse_region(min_lat, max_lat, min_lon, max_lon,
+                                    start_date, end_date)
+    vessels = _load_vessels(source, bbox, start, end)
     ranked = risk_engine.rank_targets(vessels, top_n=top_n)
     return {
         "source": source,
@@ -160,9 +222,19 @@ def get_targets(top_n: int = 5, source: str = _SOURCE_QUERY) -> Dict[str, Any]:
 
 
 @app.get("/api/vessels")
-def get_vessels(source: str = _SOURCE_QUERY) -> Dict[str, Any]:
+def get_vessels(
+    source: str = _SOURCE_QUERY,
+    min_lat: Optional[float] = None,
+    max_lat: Optional[float] = None,
+    min_lon: Optional[float] = None,
+    max_lon: Optional[float] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> Dict[str, Any]:
     """Alle Schiffe mit Score - fuer die Kartendarstellung."""
-    vessels = _load_vessels(source)
+    bbox, start, end = parse_region(min_lat, max_lat, min_lon, max_lon,
+                                    start_date, end_date)
+    vessels = _load_vessels(source, bbox, start, end)
     assessments = risk_engine.assess_all(vessels)
     return {
         "source": source,
@@ -173,12 +245,21 @@ def get_vessels(source: str = _SOURCE_QUERY) -> Dict[str, Any]:
 
 
 @app.get("/api/protected-areas")
-def get_protected_areas() -> Dict[str, Any]:
+def get_protected_areas(
+    min_lat: Optional[float] = None,
+    max_lat: Optional[float] = None,
+    min_lon: Optional[float] = None,
+    max_lon: Optional[float] = None,
+) -> Dict[str, Any]:
     """Schutzgebiets-Polygone als GeoJSON - fuer den Karten-Layer.
 
-    Quelle (lokal oder echte WDPA-Daten) steuert geo.py via PROTECTED_AREA_SOURCE.
+    Optional bbox: laedt WDPA-Polygone fuer die gewaehlte Region (passend zur
+    Schiffs-Abfrage). Ohne bbox bleibt die Env-Default-Region.
     Fehler der Geo-Quelle werden als HTTP 502 gemeldet, nie still verschluckt.
     """
+    bbox, _, _ = parse_region(min_lat, max_lat, min_lon, max_lon, None, None)
+    if bbox is not None:
+        geo.set_area(bbox)
     try:
         return geo.get_protected_areas_geojson()
     except Exception as exc:  # z. B. GfwDataApiError bei Quelle "gfw"

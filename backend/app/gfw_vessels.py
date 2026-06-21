@@ -77,6 +77,25 @@ class GfwApiError(RuntimeError):
     """Wird bei jedem Problem mit der GFW API geworfen - keine stillen Fehler."""
 
 
+class AreaTooLargeError(ValueError):
+    """bbox ueberschreitet das erlaubte Maximum (Rate-Limit-/Last-Schutz)."""
+
+
+# Maximale Kantenlaenge einer Abfrage-bbox in Grad. Groessere Gebiete wuerden zu
+# viele Events liefern (Timeout/Rate-Limit) - bewusst begrenzt, keine Weltabfrage.
+MAX_BBOX_DEGREES = 20.0
+
+
+def validate_bbox_size(bbox: "BBox") -> None:
+    """Wirft AreaTooLargeError, wenn die bbox groesser als MAX_BBOX_DEGREES ist."""
+    min_lon, min_lat, max_lon, max_lat = bbox
+    if (max_lon - min_lon) > MAX_BBOX_DEGREES or (max_lat - min_lat) > MAX_BBOX_DEGREES:
+        raise AreaTooLargeError(
+            "Area too large - zoom in and try again "
+            f"(max {MAX_BBOX_DEGREES:.0f}° x {MAX_BBOX_DEGREES:.0f}°)."
+        )
+
+
 # --------------------------------------------------------------------------- #
 # Token / Auth
 # --------------------------------------------------------------------------- #
@@ -172,7 +191,7 @@ def _bbox_to_geojson_polygon(bbox: BBox) -> Dict[str, Any]:
 
 
 def fetch_events(bbox: BBox, start: str, end: str,
-                 page_size: int = 100, max_events: int = 5000) -> List[Dict[str, Any]]:
+                 page_size: int = 100, max_events: int = 1500) -> List[Dict[str, Any]]:
     """Holt Events im Gebiet + Zeitfenster ueber POST /events (paginiert).
 
     Verifiziert gegen die Live-API:
@@ -361,9 +380,10 @@ def fetch_vessels(bbox: BBox, start: str, end: str) -> List[Vessel]:
     end   - ISO-Datum/Zeit
 
     Leitet ais_gap_hours aus GAP-Events und loitering_hours aus LOITERING-Events
-    ab; speed_knots aus fishing-Events, sonst konservativ 0.0. Wirft GfwApiError
-    bei jedem Problem.
+    ab; speed_knots aus fishing-Events, sonst konservativ 0.0. Wirft
+    AreaTooLargeError bei zu grosser bbox, sonst GfwApiError bei API-Problemen.
     """
+    validate_bbox_size(bbox)  # Rate-Limit-Schutz: max 20° x 20°
     events = fetch_events(bbox, start, end)
     return _vessels_from_events(events)
 
@@ -414,6 +434,11 @@ class GfwVesselSource:
         return fetch_vessels(self.bbox, self.start, self.end)
 
 
-def get_gfw_source() -> GfwVesselSource:
-    """Einstiegspunkt fuer main.py - analog zu sample_data.get_source()."""
-    return GfwVesselSource()
+def get_gfw_source(bbox: BBox | None = None,
+                   start: str | None = None, end: str | None = None) -> GfwVesselSource:
+    """Einstiegspunkt fuer main.py - analog zu sample_data.get_source().
+
+    bbox/start/end optional: werden sie nicht uebergeben, greifen die
+    Env-Defaults (rueckwaertskompatibel).
+    """
+    return GfwVesselSource(bbox=bbox, start=start, end=end)

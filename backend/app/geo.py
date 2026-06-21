@@ -18,6 +18,7 @@ Die rohe FeatureCollection bleibt zusaetzlich erhalten - fuer den Karten-Layer.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -39,12 +40,35 @@ DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "protected_areas.g
 def _source() -> str:
     return os.environ.get("PROTECTED_AREA_SOURCE", "local").lower()
 
+# Aktive Region (pro Anfrage setzbar). Hat Vorrang vor der Env-Default-bbox,
+# damit "Search this area" Schutzgebiete fuer die GEWAEHLTE Region laedt - nicht
+# nur fuer Galapagos. Hinweis: globaler Modul-State; bei nebenlaeufigen Requests
+# mit verschiedenen Regionen gewinnt die zuletzt gesetzte (fuer den Single-User-
+# Demo-Betrieb ausreichend).
+_active_bbox: Optional[Tuple[float, float, float, float]] = None
+
+
 # Interessensgebiet fuer die "gfw"-Quelle: nur Schutzgebiete in dieser bbox laden.
-# (min_lon, min_lat, max_lon, max_lat) - Default grob Galapagos.
+# (min_lon, min_lat, max_lon, max_lat) - aktive Region, sonst Env-Default Galapagos.
 def _aoi_bbox() -> Tuple[float, float, float, float]:
+    if _active_bbox is not None:
+        return _active_bbox
     raw = os.environ.get("PROTECTED_AREA_BBOX", "-91.8,-1.5,-89.0,0.7")
     p = [float(x) for x in raw.split(",")]
     return (p[0], p[1], p[2], p[3])
+
+
+def set_area(bbox: Optional[Tuple[float, float, float, float]]) -> None:
+    """Setzt die aktive Region fuer die Schutzgebiets-Pruefung.
+
+    Aendert sich die Region, wird der Cache verworfen, damit beim naechsten
+    Zugriff die WDPA-Polygone der neuen Region geladen werden. bbox=None setzt
+    auf den Env-Default zurueck.
+    """
+    global _active_bbox
+    if bbox != _active_bbox:
+        _active_bbox = bbox
+        reset_cache()
 
 
 # Modul-Level-Cache. Beides wird beim ersten Zugriff genau einmal befuellt.
@@ -76,8 +100,19 @@ def _load() -> Tuple[Optional[BaseGeometry], Dict[str, Any]]:
 
     if _source() == "gfw":
         # Echte WDPA-Daten live. Import lokal, damit "local" ohne die GFW-Kette laeuft.
+        # Graceful degradation: faellt die WDPA-Quelle aus (z. B. transientes 500),
+        # darf das NICHT den ganzen Schiffs-Load killen. Dann leere Geometrie ->
+        # in_protected_area=False fuer alle (konservativ). Fehler wird geloggt.
         from .gfw_data_api import fetch_protected_areas_geojson
-        fc = fetch_protected_areas_geojson(_aoi_bbox())
+        try:
+            fc = fetch_protected_areas_geojson(_aoi_bbox())
+        except Exception as exc:
+            # Fehlerfall NICHT cachen -> naechster Request versucht es erneut
+            # (transiente 500 erholen sich schnell). Vessels laden trotzdem.
+            logging.getLogger("mission_radar.geo").warning(
+                "WDPA-Schutzgebiete konnten nicht geladen werden (%s) - fahre ohne "
+                "Schutzgebiete fort (in_protected_area=False).", exc)
+            return None, {"type": "FeatureCollection", "features": []}
     else:
         # Lokale Platzhalter-GeoJSON. Fehlt sie, gibt es eben keine Schutzgebiete.
         if not DATA_PATH.exists():
