@@ -79,18 +79,18 @@ def main() -> None:
     start, end = g._default_timeframe()
     print(f"   bbox={bbox}  start={start}  end={end}")
     body: Dict[str, Any] = {
-        "datasets": [g.EVENTS_DATASET],
+        "datasets": g.EVENT_DATASETS,
         "startDate": start,
         "endDate": end,
         "geometry": g._bbox_to_geojson_polygon(bbox),
-        "limit": 5,
     }
     try:
         r = requests.post(
             f"{g.GFW_API_BASE}{g.EVENTS_ENDPOINT}",
             headers={"Authorization": f"Bearer {token}", "Accept": "application/json",
                      "Content-Type": "application/json"},
-            json=body, timeout=g.HTTP_TIMEOUT_SECONDS,
+            json=body, params={"limit": 5, "offset": 0},
+            timeout=g.HTTP_TIMEOUT_SECONDS,
         )
         print(f"   HTTP {r.status_code}")
         if r.status_code in (400, 422):

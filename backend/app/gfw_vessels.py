@@ -4,22 +4,18 @@ Dies ist die EIGENTLICHE Schiffsdatenquelle fuer den Risk Score. Sie spricht die
 Global *Fishing* Watch API v3 an (Vessels, Events, 4Wings) - NICHT die Global
 *Forest* Watch Data API (das ist gfw_data_api.py, nur Schutzgebiete).
 
-Verifiziert gegen die offizielle Doku (Stand der Recherche):
+Verifiziert gegen die LIVE-API (echter Token, Galapagos-Daten):
   https://globalfishingwatch.org/our-apis/documentation
   - Base URL: https://gateway.api.globalfishingwatch.org/v3
   - Auth:     Authorization: Bearer <GFW_API_TOKEN>
-  - Vessels:  GET /vessels/search   (datasets[0]=public-global-vessel-identity:latest)
-  - Events:   GET/POST /events      (datasets[0]=public-global-fishing-events:latest)
-              Event-Objekt: start, end, id, type, position{lat,lon},
-                            vessel{id, name, ssvid}, regions{...}
-  - Positionen: kein roher Track-Endpunkt; Praesenz/Effort via POST /4wings/report
-                (public-global-presence:latest / public-global-fishing-effort:latest)
-
-NICHT eindeutig aus der Doku-Recherche und daher unten KLAR MARKIERT (bitte in der
-Doku verifizieren, nicht raten):
-  - die exakten dataset-IDs bzw. `type`-Enum-Werte fuer GAP (AIS-off) und LOITERING
-  - die genaue POST-Body-Syntax fuer einen Geometrie-/bbox-Filter
-  - konkrete Rate-Limit-Zahlen (die Doku nennt Rate-Limit-Header, aber keine Zahlen)
+  - Events:   POST /events  - Filter (datasets, startDate, endDate, geometry) im
+              JSON-BODY; limit/offset als QUERY-Parameter (sonst HTTP 422!).
+              Erfolg = HTTP 201; "entries"-Liste, "total", "nextOffset".
+              Event-Objekt: start, end, id, type (klein: fishing/gap/loitering),
+                            position{lat,lon}, vessel{id,name,ssvid,flag}, regions
+  - Datasets: gap und loitering liegen in EIGENEN Datasets (s. EVENT_DATASETS);
+              mehrere Datasets pro Call sind erlaubt.
+  - Positionen: kein roher Track-Endpunkt; Position kommt aus den Events selbst.
 
 Grundsatz bei fehlenden Feldern: konservativer Default (lieber KEIN Risiko annehmen
 als ein falsches). Die Risk Engine bekommt am Ende fertige Vessel-Objekte und weiss
@@ -54,24 +50,24 @@ HTTP_TIMEOUT_SECONDS = float(os.environ.get("GFW_HTTP_TIMEOUT", "30"))
 EVENTS_ENDPOINT = "/events"
 VESSELS_SEARCH_ENDPOINT = "/vessels/search"
 
-# Datasets. Das Events-Dataset ist verifiziert. Die TYP-spezifischen Datasets/
-# Enum-Werte sind in der Doku zu pruefen - siehe EVENT_TYPE_* unten.
-EVENTS_DATASET = os.environ.get(
-    "GFW_EVENTS_DATASET", "public-global-fishing-events:latest"
-)
+# Datasets - alle gegen die Live-API verifiziert. gap und loitering liegen in
+# EIGENEN Datasets (nicht im fishing-events-Dataset); fuer ais_gap_hours und
+# loitering_hours muessen daher alle drei abgefragt werden. Mehrere Datasets in
+# EINEM /events-Call sind moeglich (verifiziert).
+EVENT_DATASETS: List[str] = os.environ.get(
+    "GFW_EVENT_DATASETS",
+    "public-global-fishing-events:latest,"
+    "public-global-gaps-events:latest,"
+    "public-global-loitering-events:latest",
+).split(",")
 VESSEL_IDENTITY_DATASET = os.environ.get(
     "GFW_VESSEL_DATASET", "public-global-vessel-identity:latest"
 )
 
-# ========================================================================== #
-# >>> an echte GFW-Antwort anpassen: Event-Typ-Bezeichner <<<
-# ========================================================================== #
-# Die Doku-Auszuege bestaetigen die Event-Typen (fishing, loitering, port visit,
-# encounter, "AIS off"/gap), aber NICHT die exakten Enum-Strings, die die API im
-# Feld event["type"] bzw. im Filter erwartet. Hier sind die plausiblen Werte als
-# Konstanten - in der Doku/Live-Antwort verifizieren und ggf. korrigieren.
-EVENT_TYPE_GAP = os.environ.get("GFW_EVENT_TYPE_GAP", "GAP")            # ANPASSEN
-EVENT_TYPE_LOITERING = os.environ.get("GFW_EVENT_TYPE_LOITERING", "LOITERING")  # ANPASSEN
+# Event-Typ-Bezeichner - verifiziert gegen die Live-API: type ist KLEIN
+# geschrieben ("gap", "loitering", "fishing"). Vergleich erfolgt case-insensitiv.
+EVENT_TYPE_GAP = os.environ.get("GFW_EVENT_TYPE_GAP", "gap").lower()
+EVENT_TYPE_LOITERING = os.environ.get("GFW_EVENT_TYPE_LOITERING", "loitering").lower()
 
 # bounding box: (min_lon, min_lat, max_lon, max_lat)
 BBox = Tuple[float, float, float, float]
@@ -175,45 +171,65 @@ def _bbox_to_geojson_polygon(bbox: BBox) -> Dict[str, Any]:
     }
 
 
-def fetch_events(bbox: BBox, start: str, end: str, limit: int = 1000) -> List[Dict[str, Any]]:
-    """Holt Events im Gebiet + Zeitfenster ueber POST /events.
+def fetch_events(bbox: BBox, start: str, end: str,
+                 page_size: int = 100, max_events: int = 5000) -> List[Dict[str, Any]]:
+    """Holt Events im Gebiet + Zeitfenster ueber POST /events (paginiert).
 
-    ====================================================================== #
-    >>> an echte GFW-Antwort anpassen: POST-Body fuer den Geometrie-Filter <<<
-    ====================================================================== #
-    Die Doku bestaetigt POST /events und einen Geometrie-Filter, aber die genaue
-    Body-Struktur (Schluesselname der Geometrie, Datums-/Dataset-Felder) ist zu
-    verifizieren. Die folgenden Schluessel sind eine plausible Annahme.
+    Verifiziert gegen die Live-API:
+      - Filter (datasets, startDate, endDate, geometry) gehen in den JSON-BODY.
+      - limit/offset sind QUERY-Parameter (nicht im Body, sonst HTTP 422).
+      - Erfolg ist HTTP 201; Ergebnisliste steht unter "entries", Gesamtzahl
+        unter "total", die naechste Seite unter "nextOffset".
     """
     body: Dict[str, Any] = {
-        "datasets": [EVENTS_DATASET],          # verifiziert
-        "startDate": start,                    # ANPASSEN (Feldname/Format pruefen)
-        "endDate": end,                        # ANPASSEN
-        "geometry": _bbox_to_geojson_polygon(bbox),  # ANPASSEN (Schluesselname pruefen)
-        "limit": limit,
+        "datasets": EVENT_DATASETS,
+        "startDate": start,
+        "endDate": end,
+        "geometry": _bbox_to_geojson_polygon(bbox),
     }
-    payload = _request("POST", EVENTS_ENDPOINT, json_body=body)
 
-    # Ergebnis-Liste: die GFW-Antwort kapselt Eintraege ueblicherweise unter
-    # "entries". ANPASSEN, falls die Antwort anders strukturiert ist.
-    entries = payload.get("entries")
-    if entries is None:
-        entries = payload.get("data", [])     # Fallback
-    if not isinstance(entries, list):
-        raise GfwApiError(
-            "Unerwartetes Events-Antwortformat: keine Liste gefunden "
-            "(Schluessel in fetch_events() pruefen)."
+    all_entries: List[Dict[str, Any]] = []
+    offset = 0
+    while len(all_entries) < max_events:
+        payload = _request(
+            "POST", EVENTS_ENDPOINT,
+            params={"limit": page_size, "offset": offset},
+            json_body=body,
         )
-    return entries
+        entries = payload.get("entries")
+        if not isinstance(entries, list):
+            raise GfwApiError(
+                "Unerwartetes Events-Antwortformat: keine 'entries'-Liste gefunden."
+            )
+        all_entries.extend(entries)
+
+        total = payload.get("total", len(all_entries))
+        next_offset = payload.get("nextOffset")
+        if not entries or next_offset is None or len(all_entries) >= total:
+            break
+        offset = next_offset
+
+    return all_entries
 
 
 # --------------------------------------------------------------------------- #
-# Mapping: GFW-Events -> Vessel    <<< hier an echte GFW-Antwort anpassen >>>
+# Mapping: GFW-Events -> Vessel    <<< verifiziert gegen Live-API >>>
 # --------------------------------------------------------------------------- #
+
+
+# Obergrenze fuer eine einzelne Event-Dauer. Ein offenes Event ohne "end" wuerde
+# sonst (Dauer bis "jetzt") bei historischen Abfragen absurde Werte liefern
+# (mehrere Jahre). Fuer das Risiko ist alles oberhalb der hoechsten Regelschwelle
+# ohnehin gleichwertig; 168h (1 Woche) deckelt das plausibel.
+MAX_EVENT_DURATION_HOURS = 168.0
 
 
 def _event_duration_hours(event: Dict[str, Any]) -> float:
-    """Dauer eines Events in Stunden aus start/end (ISO-8601). 0.0, wenn unklar."""
+    """Dauer eines Events in Stunden aus start/end (ISO-8601). 0.0, wenn unklar.
+
+    Auf MAX_EVENT_DURATION_HOURS gedeckelt, damit offene Events (ohne "end")
+    keine unrealistischen Dauern erzeugen.
+    """
     try:
         start = event.get("start")
         end = event.get("end")
@@ -223,7 +239,8 @@ def _event_duration_hours(event: Dict[str, Any]) -> float:
         # Laeuft das Event noch (kein end), Dauer bis jetzt rechnen - konservativ.
         t1 = (datetime.fromisoformat(str(end).replace("Z", "+00:00"))
               if end else datetime.now(timezone.utc))
-        return max((t1 - t0).total_seconds() / 3600.0, 0.0)
+        hours = (t1 - t0).total_seconds() / 3600.0
+        return max(min(hours, MAX_EVENT_DURATION_HOURS), 0.0)
     except (ValueError, TypeError):
         return 0.0
 
@@ -231,25 +248,25 @@ def _event_duration_hours(event: Dict[str, Any]) -> float:
 def _vessels_from_events(events: List[Dict[str, Any]]) -> List[Vessel]:
     """Gruppiert Events pro Schiff und baut daraus Vessel-Objekte.
 
-    ====================================================================== #
-    >>> HIER an echte GFW-Antwort anpassen <<<
-    ====================================================================== #
-    Die Feldpfade unten (event["vessel"]["ssvid"], event["position"]["lat"], ...)
-    folgen den Doku-Beispielen, sind aber an der echten Antwort zu verifizieren.
+    Feldpfade verifiziert gegen die Live-API:
+      - event["vessel"]: {id, name, ssvid, flag, type}  (ssvid = AIS-MMSI)
+      - event["position"]: {lat, lon}
+      - event["type"]: "fishing" | "gap" | "loitering" (klein)
+      - event["fishing"]["averageSpeedKnots"] (nur bei fishing-Events)
     Fehlende Felder -> konservativer Default (kein erfundenes Risiko).
     """
     by_vessel: Dict[str, Dict[str, Any]] = {}
 
     for ev in events:
         vessel = ev.get("vessel") or {}
-        # mmsi: GFW nennt die AIS-ID oft "ssvid". ANPASSEN, falls anders benannt.
+        # AIS-MMSI steht im Feld "ssvid"; "id" ist die interne GFW-Vessel-ID.
         mmsi = str(vessel.get("ssvid") or vessel.get("id") or "").strip()
         if not mmsi:
             continue  # ohne Identitaet kein sinnvolles Ziel
 
         slot = by_vessel.setdefault(mmsi, {
-            "name": vessel.get("name") or "UNBEKANNT",     # ANPASSEN
-            "flag": vessel.get("flag") or "UNK",           # ANPASSEN (evtl. nicht im Event)
+            "name": vessel.get("name") or "UNBEKANNT",
+            "flag": vessel.get("flag") or "UNK",
             "lat": None, "lon": None, "latest_ts": None,
             "speed_knots": 0.0,        # konservativer Default, s. u.
             "ais_gap_hours": 0.0,
@@ -266,10 +283,10 @@ def _vessels_from_events(events: List[Dict[str, Any]]) -> List[Vessel]:
                 slot["lat"] = float(lat)
                 slot["lon"] = float(lon)
 
-        ev_type = str(ev.get("type", "")).upper()
+        # type ist klein geschrieben; Konstanten sind ebenfalls klein.
+        ev_type = str(ev.get("type", "")).lower()
 
-        # --- Geschwindigkeit: aus fishing-Event, falls vorhanden -------------
-        # ANPASSEN: Pfad/Feldname (Doku-Beispiel: event["fishing"]["averageSpeedKnots"]).
+        # --- Geschwindigkeit: aus fishing-Event (averageSpeedKnots) ----------
         fishing = ev.get("fishing") or {}
         spd = fishing.get("averageSpeedKnots")
         if spd is not None:
