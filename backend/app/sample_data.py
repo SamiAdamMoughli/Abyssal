@@ -7,6 +7,12 @@ echten Adapter ersetzt (z. B. Global Fishing Watch API), der ebenfalls
 
 Der explizite `VesselSource`-Protokoll-Vertrag dokumentiert, was eine Datenquelle
 erfuellen muss.
+
+Vessel-Typ-Hierarchie (4 Kategorien / 14 Subtypen):
+  Commercial Fleet      container | bulk | tanker | ro_ro
+  Extractive & Fishing  trawler | longliner | purse_seiner | reefer
+  Enforcement & State   coast_guard | naval | ngo
+  Support & Special     research | tug | supply | icebreaker
 """
 
 from __future__ import annotations
@@ -34,89 +40,231 @@ class VesselSource(Protocol):
 PROTECTED_AREA_CENTER = {"lat": -0.5, "lon": -90.5}
 
 
-# Bewusst gemischte Szene: klare Verdachtsfaelle, Grenzfaelle und sauberer Transit.
-# So laesst sich pruefen, ob das Ranking sinnvoll trennt statt alles hochzustufen.
-#
-# Hinweis: `in_protected_area` wird hier NICHT mehr gesetzt. Es wird weiter unten
-# pro Schiff aus (lat, lon) ueber geo.is_in_protected_area() berechnet.
 _SAMPLE_VESSELS: List[Vessel] = [
-    # --- Klare Verdachtsfaelle (sollten oben landen) ---------------------- #
+    # ==========================================================================
+    # EXTRACTIVE & FISHING FLEET  (Diamond marker)
+    # High-risk monitoring zone — primary conservation focus.
+    # ==========================================================================
+
+    # High risk: trawler with long AIS gap and loitering inside protected zone
     Vessel(
         mmsi="412330001",
         name="Hai Feng 09",
         lat=-0.42,
         lon=-90.61,
-        speed_knots=3.2,            # Fischerei-Tempo
-        ais_gap_hours=14,           # lange AIS-Luecke
+        speed_knots=3.2,
+        ais_gap_hours=14,
         flag="CHN",
-        loitering_hours=8,          # verweilt lange
+        loitering_hours=8,
+        vessel_type="trawler",
     ),
+    # High risk: longliner with AIS gap and loitering
     Vessel(
         mmsi="725000777",
         name="Estrella del Sur",
         lat=-0.55,
         lon=-90.48,
-        speed_knots=2.6,            # Fischerei-Tempo
-        ais_gap_hours=5,            # moderate AIS-Luecke
+        speed_knots=2.6,
+        ais_gap_hours=5,
         flag="ECU",
-        loitering_hours=7,          # verweilt
+        loitering_hours=7,
+        vessel_type="longliner",
     ),
-    # --- Grenzfaelle (mittlerer Score) ----------------------------------- #
+    # Mid risk: purse seiner with significant AIS gap
     Vessel(
         mmsi="416004321",
         name="Ocean Harvest",
         lat=-0.31,
         lon=-90.20,
-        speed_knots=4.4,            # Fischerei-Tempo
-        ais_gap_hours=13,           # lange AIS-Luecke
+        speed_knots=4.4,
+        ais_gap_hours=13,
         flag="TWN",
         loitering_hours=2,
+        vessel_type="purse_seiner",
     ),
+    # Mid risk: trawler loitering near protected area boundary
     Vessel(
         mmsi="538009123",
         name="Northern Star",
         lat=-0.78,
         lon=-90.95,
-        speed_knots=3.0,            # Fischerei-Tempo
+        speed_knots=3.0,
         ais_gap_hours=0,
         flag="MHL",
-        loitering_hours=6,          # verweilt
+        loitering_hours=6,
+        vessel_type="trawler",
     ),
-    # --- Unauffaellig (Transit, sollte unten/ausgeschlossen sein) -------- #
-    Vessel(
-        mmsi="636017888",
-        name="Atlantic Trader",
-        lat=-0.10,
-        lon=-89.90,
-        speed_knots=13.5,           # klarer Transit
-        ais_gap_hours=0,
-        flag="LBR",
-        loitering_hours=0,
-    ),
-    Vessel(
-        mmsi="305887010",
-        name="Pelagic Dawn",
-        lat=-1.05,
-        lon=-91.10,
-        speed_knots=11.0,           # Transit
-        ais_gap_hours=3,            # unterhalb der Schwelle
-        flag="ATG",
-        loitering_hours=1,
-    ),
+    # Low risk: trawler, clean AIS, normal transit speed
     Vessel(
         mmsi="477995123",
         name="Blue Horizon",
         lat=-0.62,
         lon=-90.40,
-        speed_knots=2.9,            # Fischerei-Tempo, aber sonst sauber
+        speed_knots=2.9,
         ais_gap_hours=0,
         flag="HKG",
         loitering_hours=0,
+        vessel_type="trawler",
+    ),
+    # Low risk: factory reefer ship in transit
+    Vessel(
+        mmsi="305887010",
+        name="Pelagic Dawn",
+        lat=-1.05,
+        lon=-91.10,
+        speed_knots=11.0,
+        ais_gap_hours=3,
+        flag="ATG",
+        loitering_hours=1,
+        vessel_type="reefer",
+    ),
+
+    # ==========================================================================
+    # COMMERCIAL FLEET  (Rectangle marker)
+    # Highly regulated backbone of global trade — almost always AIS-clean.
+    # ==========================================================================
+
+    # Tanker in clear transit
+    Vessel(
+        mmsi="636017888",
+        name="Atlantic Trader",
+        lat=-0.10,
+        lon=-89.90,
+        speed_knots=13.5,
+        ais_gap_hours=0,
+        flag="LBR",
+        loitering_hours=0,
+        vessel_type="tanker",
+    ),
+    # Container ship with a brief unexplained AIS gap near the zone
+    Vessel(
+        mmsi="566314200",
+        name="Pacific Merchant",
+        lat=-0.78,
+        lon=-90.15,
+        speed_knots=9.5,
+        ais_gap_hours=6,
+        flag="SGP",
+        loitering_hours=2,
+        vessel_type="container",
+    ),
+    # Bulk carrier, clean transit
+    Vessel(
+        mmsi="248412000",
+        name="Bulk Jupiter",
+        lat=-1.20,
+        lon=-89.60,
+        speed_knots=11.0,
+        ais_gap_hours=0,
+        flag="MLT",
+        loitering_hours=0,
+        vessel_type="bulk",
+    ),
+    # Ro-Ro carrier, clean high-speed transit
+    Vessel(
+        mmsi="538070124",
+        name="Pacific Wings",
+        lat=0.20,
+        lon=-89.40,
+        speed_knots=14.5,
+        ais_gap_hours=0,
+        flag="MHL",
+        loitering_hours=0,
+        vessel_type="ro_ro",
+    ),
+
+    # ==========================================================================
+    # ENFORCEMENT & STATE FLEET  (Triangle marker)
+    # Defenders — maintain security and enforce environmental law.
+    # ==========================================================================
+
+    # Coast guard patrol near protected area
+    Vessel(
+        mmsi="735008001",
+        name="EC-Patrol 01",
+        lat=-0.35,
+        lon=-90.70,
+        speed_knots=8.2,
+        ais_gap_hours=0,
+        flag="ECU",
+        loitering_hours=0,
+        vessel_type="coast_guard",
+        sanctions_check=False,
+    ),
+    # Naval warship on exercise
+    Vessel(
+        mmsi="220000001",
+        name="HDMS Triton",
+        lat=0.10,
+        lon=-90.20,
+        speed_knots=15.0,
+        ais_gap_hours=0,
+        flag="DNK",
+        loitering_hours=0,
+        vessel_type="naval",
+        sanctions_check=False,
+    ),
+    # NGO direct-action vessel (Sea Shepherd-style)
+    Vessel(
+        mmsi="244860001",
+        name="MV Bob Barker",
+        lat=-0.50,
+        lon=-91.20,
+        speed_knots=6.0,
+        ais_gap_hours=0,
+        flag="NLD",
+        loitering_hours=0,
+        vessel_type="ngo",
+        sanctions_check=False,
+    ),
+
+    # ==========================================================================
+    # SUPPORT & SPECIAL PURPOSE FLEET  (Capsule marker)
+    # Scientific, logistical, and infrastructure roles.
+    # ==========================================================================
+
+    # Research vessel on survey
+    Vessel(
+        mmsi="311000450",
+        name="RV Atlantis",
+        lat=-1.40,
+        lon=-90.80,
+        speed_knots=5.5,
+        ais_gap_hours=0,
+        flag="USA",
+        loitering_hours=3,
+        vessel_type="research",
+        sanctions_check=False,
+    ),
+    # Tugboat operating in area
+    Vessel(
+        mmsi="215678900",
+        name="Salvage King",
+        lat=-0.90,
+        lon=-89.80,
+        speed_knots=4.0,
+        ais_gap_hours=0,
+        flag="MLT",
+        loitering_hours=0,
+        vessel_type="tug",
+        sanctions_check=False,
+    ),
+    # Icebreaker in transit (unusual in equatorial zone — slightly elevated suspicion)
+    Vessel(
+        mmsi="248521003",
+        name="Arctic Pioneer",
+        lat=0.30,
+        lon=-91.30,
+        speed_knots=7.0,
+        ais_gap_hours=4,
+        flag="NOR",
+        loitering_hours=0,
+        vessel_type="icebreaker",
+        sanctions_check=False,
     ),
 ]
 
-# Das Schutzgebiets-Flag echt berechnen: einmal beim Import, aus den Koordinaten.
-# Die Engine bekommt damit ein fertiges Vessel-Objekt und kennt keine Geometrie.
+# Compute in_protected_area from real geometry for every vessel.
 for _v in _SAMPLE_VESSELS:
     _v.in_protected_area = is_in_protected_area(_v.lat, _v.lon)
 

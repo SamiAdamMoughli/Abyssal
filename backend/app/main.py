@@ -10,6 +10,7 @@ Start (aus dem Ordner backend/):
 
 from __future__ import annotations
 
+from time import monotonic
 from typing import Any, Dict, Optional
 
 from fastapi import FastAPI
@@ -50,6 +51,9 @@ DEFAULT_DATA_SOURCE = os.environ.get("DATA_SOURCE", "synthetic")
 # GFW-Quelle wird LAZY erst bei Bedarf erzeugt - so stoert ein fehlender Token
 # den synthetischen Default nicht.
 _synthetic_source = get_source()
+
+_VESSEL_CACHE_TTL_SECONDS = float(os.environ.get("VESSEL_CACHE_TTL_SECONDS", "5"))
+_vessel_cache: dict[str, tuple[float, list]] = {}
 
 
 def _warmup_static_sources() -> None:
@@ -141,15 +145,27 @@ def resolve_source(name: str, bbox=None, start=None, end=None) -> VesselSource:
     )
 
 
+def _cache_key(source: str, bbox=None, start=None, end=None) -> str:
+    return f"{source}|{bbox}|{start}|{end}"
+
+
 def _load_vessels(source: str, bbox=None, start=None, end=None):
     """Holt die Schiffe der gewaehlten Quelle und uebersetzt Quellen-Fehler sauber.
 
     Zu grosse bbox -> HTTP 400 (Client). GFW-Probleme (Token, Netzwerk, HTTP) ->
     HTTP 502 - aber niemals stillschweigend verschluckt.
     """
+    key = _cache_key(source, bbox, start, end)
+    now = monotonic()
+    cached = _vessel_cache.get(key)
+    if cached is not None:
+        cached_at, cached_vessels = cached
+        if now - cached_at < _VESSEL_CACHE_TTL_SECONDS:
+            return list(cached_vessels)
+
     vessel_source = resolve_source(source, bbox, start, end)
     try:
-        return vessel_source.get_vessels()
+        vessels = vessel_source.get_vessels()
     except HTTPException:
         raise
     except Exception as exc:  # z. B. GfwApiError, AreaTooLargeError
@@ -160,6 +176,9 @@ def _load_vessels(source: str, bbox=None, start=None, end=None):
             status_code=502,
             detail=f"Datenquelle '{source}' fehlgeschlagen: {exc}",
         ) from exc
+
+    _vessel_cache[key] = (now, list(vessels))
+    return list(vessels)
 
 
 # --------------------------------------------------------------------------- #
@@ -189,6 +208,7 @@ def _assessment_to_dict(a: TargetAssessment) -> Dict[str, Any]:
         "ais_gap_hours": a.vessel.ais_gap_hours,
         "flag": a.vessel.flag,
         "loitering_hours": a.vessel.loitering_hours,
+        "vessel_type": getattr(a.vessel, "vessel_type", "unknown"),
         "score": a.score,
         "top_reason": _reason_to_dict(top) if top else None,
         "reasons": [_reason_to_dict(r) for r in a.reasons],

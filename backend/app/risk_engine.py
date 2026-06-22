@@ -38,6 +38,7 @@ class Vessel:
     ais_gap_hours: float = 0.0
     flag: str = "UNK"
     loitering_hours: float = 0.0
+    vessel_type: str = "unknown"
     # Optional: erlaubt es, den (cache-only) Sanktions-Check pro Schiff
     # abzuschalten - z. B. im synthetic-Modus. Default True.
     sanctions_check: bool = True

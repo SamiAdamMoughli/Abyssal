@@ -282,6 +282,107 @@ def _duration_from_field(value: Any, event: Dict[str, Any]) -> float:
     return max(min(hours, MAX_EVENT_DURATION_HOURS), 0.0)
 
 
+def _normalize_vessel_type(value: Any) -> str:
+    """Maps raw GFW type strings to one of the 13 subcategory slugs.
+
+    Category structure:
+      Commercial Fleet   → container, bulk, tanker, ro_ro
+      Extractive/Fishing → trawler, longliner, purse_seiner, reefer
+      Enforcement/State  → coast_guard, naval, ngo
+      Support/Special    → research, tug, supply, icebreaker
+    """
+    if not value:
+        return "unknown"
+    text = str(value).strip().lower()
+    if not text:
+        return "unknown"
+
+    # Extractive & Fishing Fleet — most specific first
+    if any(k in text for k in ["trawl", "bottom trawl", "midwater trawl"]):
+        return "trawler"
+    if any(k in text for k in ["longlin", "long line", "long-line"]):
+        return "longliner"
+    if any(k in text for k in ["purse sein", "seiner"]):
+        return "purse_seiner"
+    if any(k in text for k in ["reefer", "refrigerat", "factory ship", "processing ship", "cold storage"]):
+        return "reefer"
+    if any(k in text for k in ["fishing", "fisher", "fish vessel", "whaling", "whale catcher"]):
+        return "trawler"  # generic fishing → trawler as default subcategory
+
+    # Commercial Fleet
+    if any(k in text for k in ["container", "box ship", "containership"]):
+        return "container"
+    if any(k in text for k in ["bulk carrier", "bulker", "ore carrier", "grain carrier", "bulk"]):
+        return "bulk"
+    if any(k in text for k in ["tanker", "oil tanker", "gas tanker", "chemical tanker",
+                                 "product tanker", "vlcc", "ulcc", "aframax", "suezmax"]):
+        return "tanker"
+    if any(k in text for k in ["ro-ro", "roro", "roll-on", "roll on", "car carrier",
+                                 "vehicle carrier", "pctc"]):
+        return "ro_ro"
+    if any(k in text for k in ["cargo", "general cargo", "break bulk", "freighter"]):
+        return "bulk"  # generic cargo → bulk
+
+    # Enforcement & State Fleet
+    if any(k in text for k in ["coast guard", "coastguard", "patrol boat", "patrol vessel",
+                                 "patrol ship", "border"]):
+        return "coast_guard"
+    if any(k in text for k in ["naval", "warship", "frigate", "destroyer", "corvette",
+                                 "navy", "military vessel"]):
+        return "naval"
+    if any(k in text for k in ["ngo", "conservation", "sea shepherd", "greenpeace",
+                                 "environmental vessel"]):
+        return "ngo"
+    if any(k in text for k in ["patrol", "enforcement", "surveillance", "military"]):
+        return "coast_guard"  # generic patrol → coast_guard
+
+    # Support & Special Purpose Fleet
+    if any(k in text for k in ["research", "survey vessel", "science", "oceanograph", "scientific"]):
+        return "research"
+    if any(k in text for k in ["tug", "tugboat", "towing vessel", "salvage tug"]):
+        return "tug"
+    if any(k in text for k in ["supply", "offshore supply", "platform supply", "anchor handling"]):
+        return "supply"
+    if any(k in text for k in ["icebreak", "ice break", "polar"]):
+        return "icebreaker"
+    if any(k in text for k in ["cable", "dredge", "buoy tender", "crane vessel", "pipe lay"]):
+        return "supply"  # misc special purpose → supply
+
+    return "unknown"
+
+
+def _guess_vessel_type(vessel: Dict[str, Any], name: str, speed_knots: float,
+                       event_type: str) -> str:
+    raw_type = vessel.get("type") or vessel.get("vessel_type") or vessel.get("ship_type")
+    candidate = _normalize_vessel_type(raw_type)
+    if candidate != "unknown":
+        return candidate
+
+    if name:
+        key = name.lower()
+        if any(token in key for token in ["tanker", "oil", "gas", "chemical", "vlcc"]):
+            return "tanker"
+        if any(token in key for token in ["container", "containership"]):
+            return "container"
+        if any(token in key for token in ["bulk", "carrier", "ore", "grain"]):
+            return "bulk"
+        if any(token in key for token in ["reefer", "cold", "frozen", "factory"]):
+            return "reefer"
+        if any(token in key for token in ["trawler", "seiner", "longliner"]):
+            return candidate  # normalized already handled this
+        if any(token in key for token in ["fish", "fisher"]):
+            return "trawler"
+        if any(token in key for token in ["research", "survey", "science"]):
+            return "research"
+        if any(token in key for token in ["coast guard", "patrol", "naval"]):
+            return "coast_guard"
+    if event_type == "fishing":
+        return "trawler"
+    if 0 < speed_knots < 7.5:
+        return "trawler"
+    return "unknown"
+
+
 def _vessels_from_events(events: List[Dict[str, Any]]) -> List[Vessel]:
     """Gruppiert Events pro Schiff und baut daraus Vessel-Objekte.
 
@@ -303,6 +404,9 @@ def _vessels_from_events(events: List[Dict[str, Any]]) -> List[Vessel]:
         if not mmsi:
             continue  # ohne Identitaet kein sinnvolles Ziel
 
+        # type ist klein geschrieben; Konstanten sind ebenfalls klein.
+        ev_type = str(ev.get("type", "")).lower()
+
         slot = by_vessel.setdefault(mmsi, {
             "name": vessel.get("name") or "UNBEKANNT",
             "flag": vessel.get("flag") or "UNK",
@@ -310,7 +414,11 @@ def _vessels_from_events(events: List[Dict[str, Any]]) -> List[Vessel]:
             "speed_knots": 0.0,        # konservativer Default, s. u.
             "ais_gap_hours": 0.0,
             "loitering_hours": 0.0,
+            "vessel": vessel,
+            "event_type": ev_type,
         })
+        slot["vessel"] = vessel
+        slot["event_type"] = ev_type
 
         # --- Position: juengstes Event gewinnt -------------------------------
         pos = ev.get("position") or {}
@@ -363,6 +471,9 @@ def _vessels_from_events(events: List[Dict[str, Any]]) -> List[Vessel]:
             ais_gap_hours=s["ais_gap_hours"],
             flag=s["flag"],
             loitering_hours=s["loitering_hours"],
+            vessel_type=_guess_vessel_type(
+                s.get("vessel", {}), s["name"], s["speed_knots"], s.get("event_type", "")
+            ),
         ))
     return vessels
 
