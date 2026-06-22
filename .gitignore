@@ -17,3 +17,6 @@ venv/
 
 # Secrets / local env (never commit real tokens)
 .env
+
+# Generierter Quellen-Cache (regenerierbar via refresh_sources)
+backend/data/cache/

@@ -52,6 +52,26 @@ DEFAULT_DATA_SOURCE = os.environ.get("DATA_SOURCE", "synthetic")
 _synthetic_source = get_source()
 
 
+def _warmup_static_sources() -> None:
+    """Laedt die statischen Quellen-Caches EINMAL beim Start in den Speicher.
+
+    Danach sind die Regel-Lookups (IUU/Sanktionen/PSC/EEZ) reine In-Memory-
+    Zugriffe - kein Datei-/Netzwerk-Zugriff im Request-Pfad. Fehlt eine Quelle,
+    bleibt sie leer (Regel feuert nicht) - synthetic laeuft trotzdem.
+    """
+    from .sources import eez, iuu_list, port_control, sanctions
+    for mod in (iuu_list, sanctions, port_control, eez):
+        try:
+            mod.warmup()
+        except Exception as exc:  # noqa: BLE001
+            import logging
+            logging.getLogger("mission_radar.main").warning(
+                "Warmup der Quelle %s fehlgeschlagen: %s", mod.SOURCE, exc)
+
+
+_warmup_static_sources()
+
+
 Bbox = tuple  # (min_lon, min_lat, max_lon, max_lat)
 
 
@@ -152,6 +172,7 @@ def _reason_to_dict(reason: RiskReason) -> Dict[str, Any]:
         "points": reason.points,
         "label": reason.label,
         "detail": reason.detail,
+        "evidence_type": reason.evidence_type,
     }
 
 

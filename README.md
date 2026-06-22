@@ -116,6 +116,52 @@ Seite eine klare Fehlermeldung statt einer leeren Karte.
 
 ---
 
+## Datenquellen-Strategie: drei Klassen nach Aktualisierungsrhythmus
+
+Wichtigste Performance-Entscheidung: Daten werden nach ihrem Änderungsrhythmus
+getrennt, damit der **Request-Pfad schnell** bleibt (gemessen: synthetic
+`/api/targets` ~2–3 ms, inkl. aller Cache-Lookups).
+
+| Klasse | Quellen | Im Request-Pfad? |
+| --- | --- | --- |
+| **STATISCH** (gecacht, Background-Refresh) | IUU-Liste, Sanktionen, EEZ, Port-State-Control | **nur Cache-Lookup** (kein Netzwerk) |
+| **LIVE** (pro bbox) | AIS-Positionen/Events (GFW v3) | ja, ein Live-Call |
+| **ASYNC** (Background-Worker) | Sentinel-1 SAR / VIIRS „dark vessels" | nein — Ergebnis wird gecacht |
+
+**Statische Quellen** ([app/sources/](backend/app/sources/)) werden **einmal beim
+Start** in In-Memory-Indizes geladen (`_warmup_static_sources`); die Regeln machen
+dann nur noch `dict`/`set`-Lookups (~1.6 µs). Aktualisiert werden sie durch einen
+Background-Job, **nie** im Request:
+
+```bash
+cd backend && python -m app.refresh_sources    # z. B. täglich per Cron
+```
+
+### Ehrlicher Quellen-Stand
+
+| Quelle | Lizenz/Herkunft | Status |
+| --- | --- | --- |
+| **IUU-Liste** | CCAMLR NCP (offiziell, verifizierte IMO) | ✅ **echte Daten** (18 Schiffe), `rule_iuu_list_hit` feuert real |
+| Sanktionen | OpenSanctions (CC-BY) | 🧩 Loader bereit, **keine Rohdaten eingespeist** → Regel inaktiv |
+| EEZ | Marine Regions / VLIZ (CC-BY) | 🧩 Loader bereit, keine GeoJSON eingespeist → Regel inaktiv |
+| Port-State-Control | Paris/Tokyo MoU (öffentlich) | 🧩 Loader bereit, keine Rohdaten → Regel inaktiv |
+| SAR „dark vessels" | Copernicus Sentinel-1 (offen) | 🚧 **Async-Gerüst** ([dark_vessels.py](backend/app/sources/dark_vessels.py)), bewusst nicht implementiert |
+
+> **Ehrlich:** Es werden **keine erfundenen** Sanktions-/EEZ-/PSC-Einträge
+> gebundelt. Die Loader normalisieren auf ein einheitliches Format und cachen;
+> ohne eingespeiste Rohdaten liefern sie leer, und die zugehörige Regel feuert
+> nicht. Echte Daten werden über `refresh_sources` bzw. lokale Dateien unter
+> `backend/data/sources/` eingespeist. Listen-Treffer tragen
+> `evidence_type="hard"` (Fakt einer Behörde) gegenüber `"heuristic"` für
+> Verhaltens-Signale — entsprechend der **Zone-A-Grenze** in
+> [ARCHITECTURE.md](ARCHITECTURE.md).
+
+> **Scope (Zone A):** Corporate-/Shell-Company-/Personen-Quellen (OpenCorporates,
+> ICIJ, OCCRP, UBO) sind hier **bewusst nicht** eingebunden. Sie betreffen
+> Personen und gehören hinter ein menschengeführtes Analysten-Modul (Zone B).
+
+---
+
 ## Datenquellen: synthetisch vs. Global Fishing Watch
 
 Mission Radar kann zwischen zwei Datenquellen umschalten — die Risk Engine bleibt

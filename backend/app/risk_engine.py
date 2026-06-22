@@ -47,11 +47,15 @@ class RiskReason:
     points  - numerischer Beitrag zum Score
     label   - kurz, fuer das UI-Badge ("Im Schutzgebiet")
     detail  - ausfuehrlich, fuer den Tooltip / die Erklaerung
+    evidence_type - "hard" fuer Treffer auf offiziellen Listen (Fakt einer
+                    Behoerde), "heuristic" fuer abgeleitete Verhaltens-Signale.
+                    Default "heuristic" (rueckwaertskompatibel).
     """
 
     points: float
     label: str
     detail: str
+    evidence_type: str = "heuristic"
 
 
 @dataclass
@@ -197,6 +201,67 @@ def rule_flag_of_convenience(v: Vessel) -> Optional[RiskReason]:
     return None
 
 
+# --------------------------------------------------------------------------- #
+# Regeln aus STATISCHEN, gecachten offiziellen Quellen (NUR Cache-Lookups).
+# Diese Regeln machen KEINEN Netzwerk-Call - sie lesen aus dem lokalen Cache
+# (app/sources/*, gefuellt per Hintergrund-Job). Treffer auf offiziellen Listen
+# sind "hard evidence" (Fakt einer Behoerde), kein abgeleiteter Verdacht.
+# --------------------------------------------------------------------------- #
+
+
+def rule_iuu_list_hit(v: Vessel) -> Optional[RiskReason]:
+    """Schiff steht auf einer offiziellen IUU-Liste (CCAMLR/RFMO/TMT)."""
+    from .sources import iuu_list
+    hit = iuu_list.lookup(getattr(v, "mmsi", None), getattr(v, "imo", None), v.name)
+    if hit:
+        return RiskReason(
+            points=50, evidence_type="hard", label="Auf IUU-Liste",
+            detail=("Treffer auf einer offiziellen IUU-Schiffsliste "
+                    f"(Match ueber {hit['match']}). Autoritative Quelle - "
+                    "kein abgeleiteter Verdacht."),
+        )
+    return None
+
+
+def rule_sanctions_hit(v: Vessel) -> Optional[RiskReason]:
+    """Schiff steht auf einer offiziellen Sanktionsliste (OpenSanctions)."""
+    from .sources import sanctions
+    hit = sanctions.lookup(getattr(v, "mmsi", None), getattr(v, "imo", None), v.name)
+    if hit:
+        return RiskReason(
+            points=40, evidence_type="hard", label="Sanktioniert",
+            detail=(f"Treffer auf einer Sanktionsliste (Match ueber {hit['match']}). "
+                    "Offizielle Quelle."),
+        )
+    return None
+
+
+def rule_port_detention(v: Vessel) -> Optional[RiskReason]:
+    """Schiff hat eine Detention-Historie (Paris/Tokyo MOU)."""
+    from .sources import port_control
+    hit = port_control.lookup(getattr(v, "imo", None))
+    if hit:
+        return RiskReason(
+            points=15, evidence_type="hard", label="Hafen-Detention",
+            detail=(f"{hit['detentions']} dokumentierte Festhaltung(en) durch Port "
+                    "State Control (Paris/Tokyo MOU)."),
+        )
+    return None
+
+
+def rule_eez_violation(v: Vessel) -> Optional[RiskReason]:
+    """Schiff in fremder EEZ (Flagge != Kuestenstaat) - ohne Lizenz-Kontext."""
+    from .sources import eez
+    zone = eez.eez_at(v.lat, v.lon)
+    if zone and zone != "?" and (v.flag or "").upper()[:3] != zone.upper()[:3]:
+        return RiskReason(
+            points=10, label="Fremde EEZ",
+            detail=(f"Position in der EEZ von {zone}, Schiffsflagge {v.flag}. "
+                    "Ohne Lizenznachweis beobachtenswert (Lizenz-Kontext fehlt)."),
+        )
+    return None
+
+
 # Die Regel-Registry. NEUE REGELN werden ausschliesslich hier eingetragen -
 # kein anderer Code muss angefasst werden.
 RULES: List[Rule] = [
@@ -205,6 +270,11 @@ RULES: List[Rule] = [
     rule_ais_gap,
     rule_loitering,
     rule_flag_of_convenience,
+    # statische, gecachte offizielle Quellen (Cache-only):
+    rule_iuu_list_hit,
+    rule_sanctions_hit,
+    rule_port_detention,
+    rule_eez_violation,
 ]
 
 
