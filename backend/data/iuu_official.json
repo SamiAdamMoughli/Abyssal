@@ -1,0 +1,35 @@
+{
+  "_meta": {
+    "description": "Official IUU vessel labels - ground truth for score validation.",
+    "sources": [
+      "CCAMLR Non-Contracting Party IUU Vessel List 2025/26 (https://www.ccamlr.org/en/compliance/non-contracting-party-iuu-vessel-list)"
+    ],
+    "notes": [
+      "All 18 entries are taken verbatim from the official CCAMLR NCP list (verified IMO numbers).",
+      "CCAMLR lists IMO + names; it does NOT publish MMSI -> mmsi is null (unverified) for all entries.",
+      "The CCAMLR Contracting-Party IUU list was empty for 2025/26.",
+      "Other RFMO lists (ICCAT/IOTC/SPRFMO/NPFC) are published as PDFs and were not ingested here.",
+      "flag 'Unknown' is reproduced as-is from the official list."
+    ]
+  },
+  "vessels": [
+    {"name": "Amorinn", "aliases": ["Iceberg II", "Lome", "Noemi"], "imo": "7036345", "mmsi": null, "flag": "Unknown", "listing_source": "CCAMLR", "listing_year": 2003, "status": "listed"},
+    {"name": "Antony", "aliases": ["Urgora", "Atlantic Oji Maru No. 33", "Oji Maru No. 33"], "imo": "7236634", "mmsi": null, "flag": "Unknown", "listing_source": "CCAMLR", "listing_year": 2016, "status": "listed"},
+    {"name": "Asian Warrior", "aliases": ["Kunlun", "Taishan", "Chang Bai", "Hongshui", "Huang He 22", "Sima Qian Baru 22", "Corvus", "Galaxy", "Ina Maka", "Black Moon", "Red Moon", "Eolo", "Thule", "Magnus", "Dorita"], "imo": "7322897", "mmsi": null, "flag": "Unknown", "listing_source": "CCAMLR", "listing_year": 2003, "status": "listed"},
+    {"name": "Atlantic Wind", "aliases": ["Zemour 2", "Luampa", "Yongding", "Jiangfeng", "Chengdu", "Shaanxi Henan 33", "Xiong Nu Baru 33", "Draco I", "Liberty", "Chilbo San 33", "Hammer", "Seo Yang No. 88", "Carran"], "imo": "9042001", "mmsi": null, "flag": "Unknown", "listing_source": "CCAMLR", "listing_year": 2004, "status": "listed"},
+    {"name": "Baroon", "aliases": ["Lana", "Zeus", "Triton I"], "imo": "9037537", "mmsi": null, "flag": "Unknown", "listing_source": "CCAMLR", "listing_year": 2007, "status": "listed"},
+    {"name": "Challenge", "aliases": ["Perseverance", "Mila"], "imo": "6622642", "mmsi": null, "flag": "Unknown", "listing_source": "CCAMLR", "listing_year": 2006, "status": "listed"},
+    {"name": "Cobija", "aliases": ["Cape Flower", "Cape Wrath II"], "imo": "7330399", "mmsi": null, "flag": "Unknown", "listing_source": "CCAMLR", "listing_year": 2023, "status": "listed"},
+    {"name": "Good Hope", "aliases": ["Toto"], "imo": "7020126", "mmsi": null, "flag": "Nigeria", "listing_source": "CCAMLR", "listing_year": 2007, "status": "listed"},
+    {"name": "Heavy Sea", "aliases": ["Duero", "Julius", "Keta", "Sherpa Uno"], "imo": "7322926", "mmsi": null, "flag": "Unknown", "listing_source": "CCAMLR", "listing_year": 2004, "status": "listed"},
+    {"name": "Jinzhang", "aliases": ["Hai Lung", "Yele", "Ray", "Kily", "Constant", "Tropic", "Isla Graciosa"], "imo": "6607666", "mmsi": null, "flag": "Unknown", "listing_source": "CCAMLR", "listing_year": 2006, "status": "listed"},
+    {"name": "Koosha 4", "aliases": [], "imo": "7905443", "mmsi": null, "flag": "Iran", "listing_source": "CCAMLR", "listing_year": 2011, "status": "listed"},
+    {"name": "Limpopo", "aliases": ["Ross", "Alos", "Lena", "Cap George"], "imo": "7388267", "mmsi": null, "flag": "Unknown", "listing_source": "CCAMLR", "listing_year": 2003, "status": "listed"},
+    {"name": "Nika", "aliases": [], "imo": "8808654", "mmsi": null, "flag": "Unknown", "listing_source": "CCAMLR", "listing_year": 2020, "status": "listed"},
+    {"name": "Northern Warrior", "aliases": ["Millennium", "Sip 3"], "imo": "8808903", "mmsi": null, "flag": "Angola", "listing_source": "CCAMLR", "listing_year": 2016, "status": "listed"},
+    {"name": "Perlon", "aliases": ["Cherne", "Bigaro", "Hoking", "Sargo", "Lugalpesca"], "imo": "5062479", "mmsi": null, "flag": "Unknown", "listing_source": "CCAMLR", "listing_year": 2003, "status": "listed"},
+    {"name": "Pescacisne 1", "aliases": ["Pescacisne 2", "Zemour 1", "Kadei", "Songhua", "Yunnan", "Nihewan", "Huiquan", "Wutaishan Anhui 44", "Yangzi Hua 44", "Trosky", "Paloma V"], "imo": "9319856", "mmsi": null, "flag": "Unknown", "listing_source": "CCAMLR", "listing_year": 2008, "status": "listed"},
+    {"name": "Sea Urchin", "aliases": ["Aldabra", "Omoa I"], "imo": "7424891", "mmsi": null, "flag": "Unknown", "listing_source": "CCAMLR", "listing_year": 2007, "status": "listed"},
+    {"name": "STS-50", "aliases": ["Ayda", "Sea Breeze", "Andrey Dolgov", "Std No. 2", "Sun Tai No. 2", "Shinsei Maru No. 2"], "imo": "8514772", "mmsi": null, "flag": "Unknown", "listing_source": "CCAMLR", "listing_year": 2016, "status": "listed"}
+  ]
+}
