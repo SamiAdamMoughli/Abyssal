@@ -38,6 +38,9 @@ class Vessel:
     ais_gap_hours: float = 0.0
     flag: str = "UNK"
     loitering_hours: float = 0.0
+    # Optional: erlaubt es, den (cache-only) Sanktions-Check pro Schiff
+    # abzuschalten - z. B. im synthetic-Modus. Default True.
+    sanctions_check: bool = True
 
 
 @dataclass
@@ -224,16 +227,29 @@ def rule_iuu_list_hit(v: Vessel) -> Optional[RiskReason]:
 
 
 def rule_sanctions_hit(v: Vessel) -> Optional[RiskReason]:
-    """Schiff steht auf einer offiziellen Sanktionsliste (OpenSanctions)."""
-    from .sources import sanctions
-    hit = sanctions.lookup(getattr(v, "mmsi", None), getattr(v, "imo", None), v.name)
-    if hit:
+    """Schiff steht auf einer offiziellen Sanktionsliste (OpenSanctions, cache-only).
+
+    Eigene Risiko-Dimension (sanktionierte Tanker: Russland/Iran/Nordkorea) -
+    NICHT identisch mit IUU-Fischerei. Ergaenzt das IUU-Signal, doppelt es nicht.
+    """
+    if not getattr(v, "sanctions_check", True):
+        return None
+    from .sources import opensanctions
+    hit = opensanctions.match_vessel(
+        mmsi=getattr(v, "mmsi", None), imo=getattr(v, "imo", None), name=v.name)
+    if not hit:
+        return None
+    if hit["confidence"] == "confirmed":
         return RiskReason(
-            points=40, evidence_type="hard", label="Sanktioniert",
-            detail=(f"Treffer auf einer Sanktionsliste (Match ueber {hit['match']}). "
-                    "Offizielle Quelle."),
+            points=40, evidence_type="hard", label="SANCTIONS HIT",
+            detail=(f"Vessel on {hit['source']} sanctions list - confirmed "
+                    f"{hit['match'].upper()} match (OpenSanctions)."),
         )
-    return None
+    return RiskReason(   # probable (Name-Match) -> behavioral, manuell pruefen
+        points=25, evidence_type="behavioral", label="Probable Sanctions Match",
+        detail=(f"Name match against {hit['source']} sanctions list "
+                "(OpenSanctions) - verify manually."),
+    )
 
 
 def rule_port_detention(v: Vessel) -> Optional[RiskReason]:

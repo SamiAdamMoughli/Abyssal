@@ -19,4 +19,5 @@ venv/
 .env
 
 # Generierter Quellen-Cache (regenerierbar via refresh_sources)
-backend/data/cache/
+backend/data/cache/*
+!backend/data/cache/opensanctions_vessels.json

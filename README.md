@@ -142,7 +142,7 @@ cd backend && python -m app.refresh_sources    # z. B. täglich per Cron
 | Quelle | Lizenz/Herkunft | Status |
 | --- | --- | --- |
 | **IUU-Liste** | CCAMLR NCP (offiziell, verifizierte IMO) | ✅ **echte Daten** (18 Schiffe), `rule_iuu_list_hit` feuert real |
-| Sanktionen | OpenSanctions (CC-BY) | 🧩 Loader bereit, **keine Rohdaten eingespeist** → Regel inaktiv |
+| **Sanktionen** | OpenSanctions (CC-BY 4.0 NC), konsolidiert OFAC/EU/UN/UK/… | ✅ **echte Daten** (**1.922 Schiffe** aus 15 Quellen), `rule_sanctions_hit` feuert real |
 | EEZ | Marine Regions / VLIZ (CC-BY) | 🧩 Loader bereit, keine GeoJSON eingespeist → Regel inaktiv |
 | Port-State-Control | Paris/Tokyo MoU (öffentlich) | 🧩 Loader bereit, keine Rohdaten → Regel inaktiv |
 | SAR „dark vessels" | Copernicus Sentinel-1 (offen) | 🚧 **Async-Gerüst** ([dark_vessels.py](backend/app/sources/dark_vessels.py)), bewusst nicht implementiert |
@@ -159,6 +159,21 @@ cd backend && python -m app.refresh_sources    # z. B. täglich per Cron
 > **Scope (Zone A):** Corporate-/Shell-Company-/Personen-Quellen (OpenCorporates,
 > ICIJ, OCCRP, UBO) sind hier **bewusst nicht** eingebunden. Sie betreffen
 > Personen und gehören hinter ein menschengeführtes Analysten-Modul (Zone B).
+
+### Zwei getrennte Risiko-Dimensionen (kein Doppeln)
+
+IUU-Liste und Sanktionsliste erfassen **unterschiedliche Populationen** verdächtiger
+Schiffe — beide legitim und Zone A, aber nicht deckungsgleich:
+
+| Dimension | Population | Quelle |
+| --- | --- | --- |
+| **IUU-Fischerei** | Toothfish-Poacher, illegale Fischer (Sea-Shepherd-Kernzielgruppe) | CCAMLR/RFMO |
+| **Sanktionen** | sanktionierte Tanker (Russland/Iran/Nordkorea — Ölschmuggel, Sanktionsumgehung) | OpenSanctions |
+
+Das wurde **gemessen**, nicht angenommen: Die IUU-Anker (Thunder/Kunlun/Viking)
+bekommen **keinen** Sanctions-Hit — sie stehen auf IUU-, nicht auf Sanktionslisten.
+Das Sanctions-Signal **ergänzt** das IUU-Signal, es doppelt es nicht. So wird
+Mission Radar breiter als ursprünglich geplant, ohne die Dimensionen zu vermischen.
 
 ---
 

@@ -59,8 +59,8 @@ def _warmup_static_sources() -> None:
     Zugriffe - kein Datei-/Netzwerk-Zugriff im Request-Pfad. Fehlt eine Quelle,
     bleibt sie leer (Regel feuert nicht) - synthetic laeuft trotzdem.
     """
-    from .sources import eez, iuu_list, port_control, sanctions
-    for mod in (iuu_list, sanctions, port_control, eez):
+    from .sources import eez, iuu_list, opensanctions, port_control
+    for mod in (iuu_list, opensanctions, port_control, eez):
         try:
             mod.warmup()
         except Exception as exc:  # noqa: BLE001
