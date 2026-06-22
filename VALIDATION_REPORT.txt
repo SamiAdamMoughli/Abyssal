@@ -1,0 +1,239 @@
+==========================================================================
+MISSION RADAR - VALIDIERUNGSREPORT
+==========================================================================
+  Offizielle IUU-Eintraege: 20 gesamt (18 aktiv, 2 historisch)
+  Quelle: CCAMLR Non-Contracting Party IUU Vessel List 2025/26 (https://www.ccamlr.org/en/compliance/non-contracting-party-iuu-vessel-list); RFMO Combined IUU Vessel List / iuu-vessels.org (Thunder IMO 6905408, Viking IMO 8713392 - historische Eintraege, verifiziert)
+  Behavioral-Test-Faelle (known_cases.py): 6
+  CCAMLR-Faelle (iuu_ccamlr_cases.py):    20
+  HIGH RISK-Schwelle: Score > 60
+
+  Regeln in der Engine:
+    protected_area               [behavioral]
+    fishing_speed                [behavioral]
+    ais_gap                      [behavioral]
+    loitering                    [behavioral]
+    flag_of_convenience          [behavioral]
+    iuu_list_hit                 [list/hard-evidence]
+    sanctions_hit                [list/hard-evidence]
+    port_detention               [list/hard-evidence]
+    eez_violation                [behavioral]
+
+==========================================================================
+TEIL A1 - BEHAVIORAL RECALL  (5 dokumentierte Faelle, ohne Listen-Regeln)
+==========================================================================
+  Testet NUR Verhaltens-Regeln (speed, AIS-gap, protected-area, loitering,
+  flag). Listenbasierte Regeln (IUU-List, Sanctions, Port-Detention) sind
+  hier ausgeklammert - sie wurden das Ergebnis zirkulaer verzerren.
+
+  Schiff                           Score  Erkannt  Regeln
+  --------------------------------------------------------------------------
+  Thunder                          [####################]   100  HIGH
+                                    OK    Im Schutzgebiet, Fischerei-Tempo, AIS-Luecke >=12h, Billigflagge
+  Viking                           [####################]   100  HIGH
+                                    OK    Im Schutzgebiet, Fischerei-Tempo, AIS-Luecke >=12h, Billigflagge
+  Kunlun                           [####################]   100  HIGH
+                                    OK    Im Schutzgebiet, Fischerei-Tempo, AIS-Luecke >=12h, Billigflagge
+  STS-50 (Andrey Dolgov)           [####################]   100  HIGH
+                                    OK    Im Schutzgebiet, Fischerei-Tempo, AIS-Luecke >=12h, Billigflagge
+  Fu Yuan Yu Leng 999              [#######.............]    35  MED
+                                    NEI   Im Schutzgebiet
+                                         -> WARUM NIEDRIG: REEFER/Transport, nicht aktiv fischend -> testet eine bekannte Schwaeche regelbasierter Speed-/Gap-Logik.
+
+  BEHAVIORAL RECALL: 4/5 bekannte IUU-Faelle als HIGH RISK erkannt (80%)
+
+  --- Negativkontrolle (soll NICHT high-risk sein) ---
+  Kontrolle: legitimer Frachter (konstruiert) [####................]    20  LOW
+                                         -> OK (korrekt niedrig)
+                                         -> Regeln: Billigflagge
+
+  --- Regel-Haeufigkeit bei dokumentierten IUU-Faellen ---
+   5/5  #####   Im Schutzgebiet
+   4/5  ####    Fischerei-Tempo
+   4/5  ####    AIS-Luecke >=12h
+   4/5  ####    Billigflagge
+
+==========================================================================
+TEIL A2 - CCAMLR-ABDECKUNG  (alle 20 offiziellen Eintraege, volle Engine)
+==========================================================================
+  WICHTIGER VORBEHALT: 15 der 20 Schiffe nutzen SYNTHETISCHE Werte
+  (Typ B). Der hohe Recall bei Typ-B validiert KEINE Tuning-Quelle,
+  sondern bestaetigt nur, dass die Engine generisches IUU-Verhalten
+  erkennt. Nur Typ-A (dokumentierte Faelle) sind echter Testbeweis.
+
+  Schiff                      IMO  Typ   Full    Beh  Regeln (full)
+  --------------------------------------------------------------------------
+  Thunder                 6905408  [A]  [+]100  [+]100  Auf IUU-Liste, Im Schutzgebiet, Fischerei-Tempo, AIS-Luecke >=12h, Billigflagge
+  Viking                  8713392  [A]  [+]100  [+] 85  Auf IUU-Liste, Im Schutzgebiet, Fischerei-Tempo, AIS-Luecke >=12h
+  Asian Warrior           7322897  [A]  [+]100  [+]100  Auf IUU-Liste, Im Schutzgebiet, Fischerei-Tempo, AIS-Luecke >=12h, Billigflagge
+  STS-50                  8514772  [A]  [+]100  [+]100  Auf IUU-Liste, Im Schutzgebiet, Fischerei-Tempo, AIS-Luecke >=12h, Billigflagge
+  Amorinn                 7036345  [B]  [+]100  [+] 95  Auf IUU-Liste, Im Schutzgebiet, Fischerei-Tempo, AIS-Luecke >=12h, Verweilen >=12h
+  Antony                  7236634  [B]  [+]100  [+] 95  Auf IUU-Liste, Im Schutzgebiet, Fischerei-Tempo, AIS-Luecke >=12h, Verweilen >=12h
+  Atlantic Wind           9042001  [B]  [+]100  [+] 95  Auf IUU-Liste, Im Schutzgebiet, Fischerei-Tempo, AIS-Luecke >=12h, Verweilen >=12h
+  Baroon                  9037537  [B]  [+]100  [+] 95  Auf IUU-Liste, Im Schutzgebiet, Fischerei-Tempo, AIS-Luecke >=12h, Verweilen >=12h
+  Challenge               6622642  [B]  [+]100  [+] 95  Auf IUU-Liste, Im Schutzgebiet, Fischerei-Tempo, AIS-Luecke >=12h, Verweilen >=12h
+  Cobija                  7330399  [B]  [+]100  [+] 95  Auf IUU-Liste, Im Schutzgebiet, Fischerei-Tempo, AIS-Luecke >=12h, Verweilen >=12h
+  Good Hope               7020126  [B]  [+]100  [+]100  Auf IUU-Liste, Im Schutzgebiet, Fischerei-Tempo, AIS-Luecke >=12h, Billigflagge, Verweilen >=12h
+  Heavy Sea               7322926  [B]  [+]100  [+] 95  Auf IUU-Liste, Im Schutzgebiet, Fischerei-Tempo, AIS-Luecke >=12h, Verweilen >=12h
+  Jinzhang                6607666  [B]  [+]100  [+] 95  Auf IUU-Liste, Im Schutzgebiet, Fischerei-Tempo, AIS-Luecke >=12h, Verweilen >=12h
+  Koosha 4                7905443  [B]  [+]100  [+] 95  Auf IUU-Liste, Im Schutzgebiet, Fischerei-Tempo, AIS-Luecke >=12h, Verweilen >=12h
+  Limpopo                 7388267  [B]  [+]100  [+] 95  Auf IUU-Liste, Im Schutzgebiet, Fischerei-Tempo, AIS-Luecke >=12h, Verweilen >=12h
+  Nika                    8808654  [B]  [+]100  [+] 95  Auf IUU-Liste, Im Schutzgebiet, Fischerei-Tempo, AIS-Luecke >=12h, Verweilen >=12h
+  Northern Warrior        8808903  [B]  [+]100  [+] 95  Auf IUU-Liste, Im Schutzgebiet, Fischerei-Tempo, AIS-Luecke >=12h, Verweilen >=12h
+  Perlon                  5062479  [B]  [+]100  [+] 95  Auf IUU-Liste, Im Schutzgebiet, Fischerei-Tempo, AIS-Luecke >=12h, Verweilen >=12h
+  Pescacisne 1            9319856  [B]  [+]100  [+] 95  Auf IUU-Liste, Im Schutzgebiet, Fischerei-Tempo, AIS-Luecke >=12h, Verweilen >=12h
+  Sea Urchin              7424891  [B]  [+]100  [+] 95  Auf IUU-Liste, Im Schutzgebiet, Fischerei-Tempo, AIS-Luecke >=12h, Verweilen >=12h
+
+  GESAMT (20 Schiffe):  Full=20/20  Behavioral-only=20/20
+  Typ A (dokumentiert, n=4): Full=4/4, Behavioral=4/4
+  Typ B (synthetisch,  n=16): Full=16/16, Behavioral=16/16
+  -> Typ-B-Recall ist DESIGNBEDINGT hoch (Werte auf IUU-Verhalten ausgelegt).
+
+==========================================================================
+TEIL B - GFW SCORE-VERTEILUNG  (Live-AIS-Daten)
+==========================================================================
+
+  KEIN GFW_API_TOKEN gesetzt -> dieser Abschnitt wird uebersprungen.
+
+  Was dieser Abschnitt liefern WUERDE:
+  - 50-100 echte Vessels aus einer bekannten IUU-Region (z.B. Westafrika)
+  - Score-Verteilung: 0-20 / 20-40 / 40-60 / 60-80 / 80-100
+  - Wie viele echte unbekannte Schiffe landen im HIGH RISK Bereich?
+  - Ist der Score inflationiert (zu viele HIGH RISK) oder zurueckhaltend?
+
+  Fuer echte Kalibrierung: GFW_API_TOKEN setzen und Report neu laufen.
+  Alternativ: synthetic-Mode (sample_data.py) fuer eine erste Schaetzung.
+
+  SCORE-INTERPRETATION OHNE LIVE-DATEN:
+  - Kontrolle (Panama-Frachter, konstruiert): Score 20  (nur Billigflagge)
+  - Ein normaler Fischkutter ohne IUU-Signale: Score 0-25 erwartet
+  - Ein Schiff NUR in Schutzgebiet (kein Fischtempo): Score 35
+  - Vollbild IUU-Signale (alle 4 behavioral): Score ~95
+
+==========================================================================
+TEIL C - SANCTIONS-DIMENSION  (1.922 OpenSanctions-Vessels)
+==========================================================================
+  WICHTIG: Sanktionierte Schiffe (Tanker: Russland/Iran/Nordkorea) sind
+  eine ANDERE Population als IUU-Fischer. Beide Signale sind valide,
+  aber UNABHAENGIG. Sanctions-Hit != IUU-Fischerei.
+
+  Gecachte Sanctions-Schiffe: 1922
+  Davon IMO-indiziert:        1907
+  Davon MMSI-indiziert:       794
+
+  --- Score-Beitrag der Sanctions-Regel (allein) ---
+  Confirmed Hit (IMO/MMSI-Match):  +40 Punkte
+  Probable Hit  (Name-Match):      +25 Punkte
+  HIGH RISK-Schwelle:              > 60 Punkte
+
+  Ergebnis: Sanctions-Regel ALLEIN reicht NICHT fuer HIGH RISK.
+  Fehlende Punkte: 21+ (confirmed) oder 36+ (probable)
+
+  Was zusaetzlich benoetigt wird fuer HIGH RISK:
+    Confirmed (+40) + AIS-Gap >=12h (+25) = 65  -> HIGH RISK
+    Confirmed (+40) + Schutzgebiet   (+35) = 75  -> HIGH RISK
+    Confirmed (+40) + Fischtempo      (+25) = 65  -> HIGH RISK
+    Confirmed (+40) + Billigflagge    (+20) = 60  -> NICHT >60 (Grenze)
+    Confirmed (+40) + Billigflagge+Loitering = 70 -> HIGH RISK
+
+    Probable  (+25) + Schutzgebiet   (+35) = 60  -> NICHT >60
+    Probable  (+25) + Schutzg.+Loitering   = 70  -> HIGH RISK
+
+  Schlussfolgerung: Fuer ein sanktioniertes Schiff muss MINDESTENS
+  EIN starkes behaviorales Signal (AIS-Gap, Fischtempo, Schutzgebiet)
+  zu einem confirmed Sanctions-Hit hinzukommen, um HIGH RISK zu erreichen.
+
+  --- Demo: Score fuer Sanctions-only Szenarien ---
+  (Minimale Vessel-Objekte: keine Verhaltenssignale ausser Identitaet)
+    NURKEZ                        Score  60  (us_ofac_sdn, us_trade_csl)
+    FUGA BLUEMARINE               Score  40  (eu_sanctions_map, gb_fcdo_sanc)
+    CONRAD                        Score  40  (us_ofac_sdn, us_trade_csl)
+    FU YUAN YU 8644               Score  40  (us_ofac_sdn, us_trade_csl)
+    SERENE I                      Score  60  (us_ofac_sdn, us_trade_csl)
+
+  -> Keines der Demo-Schiffe erreicht HIGH RISK ohne Verhaltenssignale.
+  -> Sanctions-Dimension ist wertvoll als ERGAENZUNG, nicht als Hauptsignal.
+
+  --- IUU/Sanctions Overlap (Welche bekannten IUU-Schiffe sind AUCH sanctions?) ---
+  1 IUU-Schiffe auch auf Sanktionsliste:
+    Baroon: probable name_fuzzy -> OFAC
+
+==========================================================================
+TEIL D - SCHWÄCHSTE REGELN  (feuern bei wie vielen IUU-Faellen?)
+==========================================================================
+  Basis: alle 20 CCAMLR-Faelle (inkl. 15 synthetisch).
+  Nur dokumentierte Typ-A-Faelle sind echter Beweis.
+
+  Regel                          Alle (n=20)  Typ-A (n=4)  Einschaetzung
+  --------------------------------------------------------------------------
+  protected_area                  20/20 (100%)    4/4 (100%)  
+  fishing_speed                   20/20 (100%)    4/4 (100%)  <- sehr haeufig, Basis-Signal
+  ais_gap                         20/20 (100%)    4/4 (100%)  <- sehr haeufig, Basis-Signal
+  loitering                       16/20 ( 80%)    0/4 (  0%)  
+  flag_of_convenience              4/20 ( 20%)    3/4 ( 75%)  
+  iuu_list_hit                    20/20 (100%)    4/4 (100%)  <- sehr haeufig, Basis-Signal
+  sanctions_hit                    0/20 (  0%)    0/4 (  0%)  <- KEINE Treffer bei IUU
+  port_detention                   0/20 (  0%)    0/4 (  0%)  <- KEINE Treffer bei IUU
+  eez_violation                    0/20 (  0%)    0/4 (  0%)  <- KEINE Treffer bei IUU
+
+  Regeln mit 0 Treffern bei echten IUU-Faellen (Typ-A):
+    -> loitering
+       (alle 4 dokumentierten Faelle haben loitering_hours < 12h-Schwelle)
+       -> Schwelle koennte zu hoch sein, oder Approximationen konservativ
+    -> sanctions_hit
+       (sanctions_check=False fuer CCAMLR-Faelle gesetzt)
+    -> port_detention
+       (kein PSC-Datensatz; rule_port_detention feuert generell nie)
+    -> eez_violation
+       (EEZ-Check fehlt; Positionen der CCAMLR-Faelle generisch)
+
+  Empfehlung basierend auf Daten:
+  - rule_port_detention: Feuert nie (kein Datensatz) -> PSC-Daten einspeisen
+    oder Regel temporaer aus Kalibrierungsanalyse ausklammern.
+  - rule_flag_of_convenience: Feuert nur bei bekannten Flags; 'Unknown'
+    (CCAMLR-Listing) loest nichts aus -> Abdeckung begrenzt (Design-Grenze).
+  - rule_eez_violation: Generische Suedpolarmeer-Koordinaten, kein EEZ-Hit
+    -> Besser mit echten Positionsdaten testen.
+  KEINE Gewichtsaenderung empfohlen ohne echte AIS-Daten als Basis.
+
+==========================================================================
+BEKANNTE GRENZEN DIESES REPORTS  (Pflicht - nicht optional)
+==========================================================================
+  1. Catch-Bias:
+     Nur ERWISCHTE Schiffe stehen auf IUU-Listen. Schiffe, die nie aufflogen,
+   fehlen komplett. Der Score wurde auf unbekannten True-Positives getestet
+   -> echter Recall ist nicht messbar, nur eine Untergrenze.
+  2. Keine sauberen Negativ-Labels:
+     Wir haben Positiv-Labels (IUU-Liste), aber KEINEN verlaesslichen
+   Datensatz bestaetigt-legaler Schiffe. Ein Schiff NICHT auf der Liste
+   bedeutet NICHT, dass es legal fischt. False-Positive-Rate unbekannt.
+  3. Synthetische Annaeherung (15/20 Schiffe):
+     Die meisten Vessel-Objekte (Typ B) nutzen GENERISCHE IUU-Verhaltenswerte,
+   keine echten AIS-Traces. Ein hoher Recall bei Typ B beweist nichts -
+   die Werte wurden auf erkennbares IUU-Verhalten ausgelegt.
+  4. Echter Verhaltenstest: n=5:
+     Nur 5 Faelle (known_cases.py) haben dokumentiert-approximierte Verhaltenswerte.
+   Das ist statistisch nicht belastbar. Recall 80% (4/5) = ein einziger
+   Fehlerfall. Echte Kalibrierung braucht Hunderte gelabelter AIS-Traces.
+  5. Sanctions != IUU:
+     OpenSanctions trifft eine andere Population (sanktionierte Tanker).
+   Beide Signale sind valide aber UNABHAENGIG. Kein Overlap erwartet
+   und im Report bestaetigt.
+  6. Zirkulaer: rule_iuu_list_hit:
+     Die App-interne IUU-Regel liest aus derselben Datei wie die Validation-Labels.
+   Dass diese Regel bei CCAMLR-Schiffen feuert, ist eine Tautologie,
+   kein echter Validierungsbeweis. Deshalb Abschnitt A1 ohne Listen-Regeln.
+  7. Score = Hypothese:
+     Ein hoher Score ist ein Hinweis zum Hinschauen, KEIN Beweis fuer
+   illegale Aktivitaet. Evidence_type='hard' (Listen) != Beweis eines
+   Verbrechens; 'heuristic' ist ein abgeleitetes Signal.
+  8. Defunkte Schiffe:
+     Thunder und Viking sind versenkt (2015/2016). Sie tauchen in keinem
+   Live-AIS-Feed auf. Live-Matching gegen echte Daten erzeugt
+   fast immer 0 Treffer fuer historische IUU-Schiffe.
+
+--------------------------------------------------------------------------
+  FAZIT: Der Score ist eine sinnvolle Hypothese, jetzt gegen echte Fakten
+  gespiegelt. Behavioral-Recall 80% (4/5 dokumentierte Faelle) ist ein
+  echter Befund - der Fu Yuan Yu-Fehler (Score 35) zeigt eine reale Luecke:
+  Transport-/Reeferfahrzeuge mit illegaler Ladung entgehen Fischtempo-Regeln.
+  Fuer echte Kalibrierung: GFW AIS-Traces mit IUU-Labels benoetigt.

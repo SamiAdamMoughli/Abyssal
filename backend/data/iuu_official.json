@@ -2,11 +2,14 @@
   "_meta": {
     "description": "Official IUU vessel labels - ground truth for score validation.",
     "sources": [
-      "CCAMLR Non-Contracting Party IUU Vessel List 2025/26 (https://www.ccamlr.org/en/compliance/non-contracting-party-iuu-vessel-list)"
+      "CCAMLR Non-Contracting Party IUU Vessel List 2025/26 (https://www.ccamlr.org/en/compliance/non-contracting-party-iuu-vessel-list)",
+      "RFMO Combined IUU Vessel List / iuu-vessels.org (Thunder IMO 6905408, Viking IMO 8713392 - historische Eintraege, verifiziert)"
     ],
     "notes": [
-      "All 18 entries are taken verbatim from the official CCAMLR NCP list (verified IMO numbers).",
-      "CCAMLR lists IMO + names; it does NOT publish MMSI -> mmsi is null (unverified) for all entries.",
+      "18 aktuelle CCAMLR-Eintraege direkt aus der offiziellen NCP-Liste 2025/26 (verifizierte IMO-Nummern).",
+      "Thunder (IMO 6905408): CCAMLR-gelistet 2006-2015, delisted nach Versenkung (5. April 2015, Sao Tome). IMO verifiziert via iuu-vessels.org/RFMO Combined IUU List.",
+      "Viking (IMO 8713392): CCAMLR-gelistet 2004, SEAFO 2007, GFCM 2014; delisted nach Versenkung durch Indonesien (14. Maerz 2016). IMO verifiziert via iuu-vessels.org.",
+      "CCAMLR lists IMO + names; it does NOT publish MMSI -> mmsi is null for all entries.",
       "The CCAMLR Contracting-Party IUU list was empty for 2025/26.",
       "Other RFMO lists (ICCAT/IOTC/SPRFMO/NPFC) are published as PDFs and were not ingested here.",
       "flag 'Unknown' is reproduced as-is from the official list."
@@ -30,6 +33,28 @@
     {"name": "Perlon", "aliases": ["Cherne", "Bigaro", "Hoking", "Sargo", "Lugalpesca"], "imo": "5062479", "mmsi": null, "flag": "Unknown", "listing_source": "CCAMLR", "listing_year": 2003, "status": "listed"},
     {"name": "Pescacisne 1", "aliases": ["Pescacisne 2", "Zemour 1", "Kadei", "Songhua", "Yunnan", "Nihewan", "Huiquan", "Wutaishan Anhui 44", "Yangzi Hua 44", "Trosky", "Paloma V"], "imo": "9319856", "mmsi": null, "flag": "Unknown", "listing_source": "CCAMLR", "listing_year": 2008, "status": "listed"},
     {"name": "Sea Urchin", "aliases": ["Aldabra", "Omoa I"], "imo": "7424891", "mmsi": null, "flag": "Unknown", "listing_source": "CCAMLR", "listing_year": 2007, "status": "listed"},
-    {"name": "STS-50", "aliases": ["Ayda", "Sea Breeze", "Andrey Dolgov", "Std No. 2", "Sun Tai No. 2", "Shinsei Maru No. 2"], "imo": "8514772", "mmsi": null, "flag": "Unknown", "listing_source": "CCAMLR", "listing_year": 2016, "status": "listed"}
+    {"name": "STS-50", "aliases": ["Ayda", "Sea Breeze", "Andrey Dolgov", "Std No. 2", "Sun Tai No. 2", "Shinsei Maru No. 2"], "imo": "8514772", "mmsi": null, "flag": "Unknown", "listing_source": "CCAMLR", "listing_year": 2016, "status": "listed"},
+    {
+      "name": "Thunder",
+      "aliases": ["Ming 5", "Wuhan No. 4", "Kuko", "Typhoon 1", "Typhoon", "Rubin", "Arctic Ranger", "Vesturvon"],
+      "imo": "6905408",
+      "mmsi": null,
+      "flag": "Unknown",
+      "listing_source": "CCAMLR",
+      "listing_year": 2006,
+      "status": "delisted",
+      "_note": "Bandit 6. Gesunken 5. April 2015 vor Sao Tome (110-Tage-Verfolgung Sea Shepherd). IMO verifiziert: iuu-vessels.org/Vessel/GetVessel/1682340a-5cea-4491-b688-6b3c5c090c4d"
+    },
+    {
+      "name": "Viking",
+      "aliases": ["Octopus-1", "Snake", "Berber", "Pion", "The Bird", "Chu Lim", "Yin Peng", "Thor 33", "Gale", "South Boy", "Piscis", "Choyo Maru No. 5", "Ulyses"],
+      "imo": "8713392",
+      "mmsi": null,
+      "flag": "Unknown",
+      "listing_source": "CCAMLR",
+      "listing_year": 2004,
+      "status": "delisted",
+      "_note": "Bandit 6. 13 Namen, 12 Flaggen. Von Indonesien versenkt 14. Maerz 2016. IMO verifiziert: iuu-vessels.org/Vessel/GetVessel/ddc12e4c-0ab3-46fd-b661-d9c3b88c636f"
+    }
   ]
 }
