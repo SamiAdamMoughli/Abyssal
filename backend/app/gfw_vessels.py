@@ -54,11 +54,22 @@ VESSELS_SEARCH_ENDPOINT = "/vessels/search"
 # EIGENEN Datasets (nicht im fishing-events-Dataset); fuer ais_gap_hours und
 # loitering_hours muessen daher alle drei abgefragt werden. Mehrere Datasets in
 # EINEM /events-Call sind moeglich (verifiziert).
+#
+# ENCOUNTER-Events (public-global-encounters-events:latest):
+#   Zwei Schiffe < 0.5 nm fuereinander fuer >= 2 h (GFW-Definition).
+#   Staerkster publizierter Transhipment-Indikator aus AIS-Daten.
+#   Quelle: Kroodsma et al. 2018, doi.org/10.1126/sciadv.abb3887
+#   Mapping: encounter.durationHours -> rendezvous_duration_hours
+#            Anzahl Fischereifahrzeuge in Begegnung -> nearby_fishing_vessels
+#   HINWEIS: Encounter-API-Struktur unverifiziert gegen Live-API (kein Token).
+#            Feldnamen basieren auf GFW-Dokumentation und oeffentlichen Beispielen.
+#            Bei Produktions-Einsatz: gegen echte API-Antwort verifizieren.
 EVENT_DATASETS: List[str] = os.environ.get(
     "GFW_EVENT_DATASETS",
     "public-global-fishing-events:latest,"
     "public-global-gaps-events:latest,"
-    "public-global-loitering-events:latest",
+    "public-global-loitering-events:latest,"
+    "public-global-encounters-events:latest",
 ).split(",")
 VESSEL_IDENTITY_DATASET = os.environ.get(
     "GFW_VESSEL_DATASET", "public-global-vessel-identity:latest"
@@ -68,6 +79,13 @@ VESSEL_IDENTITY_DATASET = os.environ.get(
 # geschrieben ("gap", "loitering", "fishing"). Vergleich erfolgt case-insensitiv.
 EVENT_TYPE_GAP = os.environ.get("GFW_EVENT_TYPE_GAP", "gap").lower()
 EVENT_TYPE_LOITERING = os.environ.get("GFW_EVENT_TYPE_LOITERING", "loitering").lower()
+EVENT_TYPE_ENCOUNTER = os.environ.get("GFW_EVENT_TYPE_ENCOUNTER", "encounter").lower()
+
+# AIS vessel-type codes fuer Fischereifahrzeuge (SOLAS/IMO Ship Type Codes).
+# Quelle: IMO / ITU AIS Ship Type Codes (Field 8 im AIS-Datagramm).
+# 30 = fishing; 1232-1250 = various fishing subtypes
+_FISHING_AIS_CODES = {30, 31, 32, 33, 34, 35, 36, 37}  # fishing + related
+_FISHING_TYPE_KEYWORDS = {"fishing", "trawler", "longliner", "purse_seiner", "reefer"}
 
 # bounding box: (min_lon, min_lat, max_lon, max_lat)
 BBox = Tuple[float, float, float, float]
@@ -414,6 +432,8 @@ def _vessels_from_events(events: List[Dict[str, Any]]) -> List[Vessel]:
             "speed_knots": 0.0,        # konservativer Default, s. u.
             "ais_gap_hours": 0.0,
             "loitering_hours": 0.0,
+            "rendezvous_duration_hours": 0.0,
+            "nearby_fishing_vessels": 0,
             "vessel": vessel,
             "event_type": ev_type,
         })
@@ -454,6 +474,26 @@ def _vessels_from_events(events: List[Dict[str, Any]]) -> List[Vessel]:
             dur = _duration_from_field(loit.get("totalTimeHours"), ev)
             slot["loitering_hours"] = max(slot["loitering_hours"], dur)
 
+        # --- Encounter (Rendezvous) -> rendezvous_duration_hours + nearby_fishing
+        # GFW Encounter-Events: zwei Schiffe < 0.5 nm, beide < 3 kn, >= 2 h.
+        # Quelle: Kroodsma et al. 2018, doi.org/10.1126/sciadv.abb3887
+        #
+        # API-Struktur (unverifiziert gegen Live-API, basiert auf GFW-Dokumentation):
+        #   event["encounter"]["durationHours"]       -> Rendezvous-Dauer
+        #   event["encounter"]["vessel"]["type"]      -> Typ des anderen Schiffs
+        #   event["encounter"]["vessel"]["flag"]      -> Flagge des anderen Schiffs
+        # HINWEIS: Wenn Struktur abweicht -> Felder default 0 (konservativ).
+        if ev_type == EVENT_TYPE_ENCOUNTER:
+            enc = ev.get("encounter") or {}
+            dur = _duration_from_field(enc.get("durationHours"), ev)
+            slot["rendezvous_duration_hours"] = max(
+                slot["rendezvous_duration_hours"], dur)
+            # Pruefe ob anderes Schiff ein Fischereifahrzeug ist.
+            other = enc.get("vessel") or enc.get("otherVessel") or {}
+            other_type = str(other.get("type") or "").strip().lower()
+            if other_type in _FISHING_TYPE_KEYWORDS or other_type == "fishing":
+                slot["nearby_fishing_vessels"] = slot["nearby_fishing_vessels"] + 1
+
     # In Vessel-Objekte ueberfuehren. Schiffe ohne Position auslassen (ohne
     # lat/lon kein Kartenpunkt und keine Schutzgebiets-Pruefung).
     vessels: List[Vessel] = []
@@ -474,6 +514,9 @@ def _vessels_from_events(events: List[Dict[str, Any]]) -> List[Vessel]:
             vessel_type=_guess_vessel_type(
                 s.get("vessel", {}), s["name"], s["speed_knots"], s.get("event_type", "")
             ),
+            # Transhipment-Felder aus Encounter-Events (0 wenn keine Events)
+            rendezvous_duration_hours=s.get("rendezvous_duration_hours", 0.0),
+            nearby_fishing_vessels=s.get("nearby_fishing_vessels", 0),
         ))
     return vessels
 

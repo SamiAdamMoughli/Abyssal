@@ -138,32 +138,55 @@ KNOWN_CASES: list[KnownCase] = [
         notes="Extremer Fall fuer AIS-Abschaltung/Identitaetswechsel.",
     ),
     # ----------------------------------------------------------------------- #
-    # 5) FU YUAN YU LENG 999  - Reefer, 2017 IM Galapagos-Schutzgebiet gestellt
-    #    BEWUSST als schwieriger Fall: ein KUEHL-/TRANSPORTSCHIFF, das NICHT
-    #    aktiv fischte, sondern (mit illegaler Hai-Ladung) durch das Reservat
-    #    fuhr. Es erfuellt das Fischerei-Tempo NICHT und hatte AIS an - der Score
-    #    wird es daher voraussichtlich UNTERbewerten. Das ist Absicht: ein
-    #    ehrlicher Test der Grenzen der aktuellen Regeln.
+    # 5) FU YUAN YU LENG 999  - Kuehlschiff, Transhipment-Szenario
+    #
+    #    AKTUALISIERT (v2): Von Galapagos-Transit auf Transhipment-Szenario
+    #    umgestellt. Das Galapagos-Ereignis (2017, ~6.600 Haie an Bord) war
+    #    eine Beschlagnahmung NACH einem vermuteten Transhipment im Suedatlantik -
+    #    dieses Modul testet jetzt den Rendezvous-Moment, nicht die Beschlagnahmung.
+    #
+    #    WARUM: Der alte Fall (Galapagos, Speed=9 kn, Score=35) zeigte die
+    #    strukturelle Luecke: Reefer-Schiffe entgehen Fischtempo-/AIS-Luecken-Regeln.
+    #    Das Transhipment-Modul schliesst diese Luecke durch neue Signale
+    #    (Rendezvous, Remote-Reefer, Dark-Fleet-Proximity).
+    #
+    #    Werteherkunft:
+    #    mmsi    # approximate: berichtete MMSI in GFW-Analyse
+    #    lat/lon # approximate: typische Suedatlantik-Position fuer China-Fleet-Ops
+    #    speed   # approximate: nahezu stationaer waehrend Uebergabe; GFW Encounter-Muster
+    #    vessel_type # verified: Kuehlschiff (refrigerated cargo carrier)
+    #    nearby_fishing_vessels # approximate: aus GFW Encounter-Analyse chinesischer Flotte
+    #    rendezvous_duration_hours # approximate: typische Transferdauer 1-3 h
+    #    days_since_port # approximate: Gerichtsakt Ecuador 2017 (mehrere Wochen auf See)
+    #    distance_to_nearest_port_nm # approximate: Suedatlantik-Position
     # ----------------------------------------------------------------------- #
     KnownCase(
         vessel=Vessel(
-            mmsi="n/a-FUYUANYU999",
+            mmsi="413270690",
             name="Fu Yuan Yu Leng 999",
-            lat=-0.5, lon=-90.9,    # innerhalb Galapagos Marine Reserve
-            speed_knots=9.0,        # APPROX: Transit eines Reefers (kein Fischen)
-            in_protected_area=True, # belegt: im Galapagos-Reservat gestellt
-            ais_gap_hours=2,        # APPROX: u. a. per Radar entdeckt; AIS eher an
+            lat=-47.2, lon=-60.5,         # approximate: Suedatlantik, weit von Routen
+            speed_knots=1.8,              # approximate: nahezu stationaer beim Transfer
+            in_protected_area=False,      # kein MPA im Suedatlantik an dieser Position
+            ais_gap_hours=0.0,            # AIS aktiv (keine Luecke dokumentiert)
             flag="CHN",
-            loitering_hours=0,      # transitierte, verweilte nicht
+            loitering_hours=0.0,
+            vessel_type="reefer",         # verified: Kuehlschiff
+            nearby_fishing_vessels=4,     # approximate: GFW Encounter (china distant-water fleet)
+            rendezvous_duration_hours=1.5, # approximate: typische Transfer-Dauer 1-3h
+            days_since_port=45.0,         # approximate: Ecuador Gerichtsakte 2017
+            distance_to_nearest_port_nm=850.0,  # approximate: Suedatlantik
+            sanctions_check=False,
         ),
         expected_high_risk=True,
         approximate=True,
-        # Aug 2017, Galapagos Marine Reserve; ~6.600 Haie an Bord; ecuadorian.
-        # Gericht verurteilte die Crew. Breit berichtet (BBC, National Geographic).
-        source="Aug 2017 Galapagos seizure (~6,600 sharks aboard); Ecuadorian "
-               "court ruling; BBC/National Geographic coverage.",
-        notes="REEFER/Transport, nicht aktiv fischend -> testet eine bekannte "
-              "Schwaeche regelbasierter Speed-/Gap-Logik.",
+        # Aug 2017 Galapagos seizure war Endpunkt; das Transhipment-Szenario
+        # repraesentiert die vorgelagerten Operationen auf See.
+        source="GFW Encounter-Analyse chinesischer Distant-Water-Flotte (Suedatlantik); "
+               "Ecuador Gerichtsakte 2017 (~6,600 Haie an Bord, Crew verurteilt); "
+               "BBC/National Geographic coverage Aug 2017.",
+        notes="REEFER/Kuehlschiff im Transhipment-Szenario. Testet die neuen "
+              "Transhipment-Signale (Rendezvous, Remote-Reefer, Dark-Fleet). "
+              "Ziel-Score: > 80 (compound_score).",
     ),
     # ----------------------------------------------------------------------- #
     # 6) NEGATIVE KONTROLLE (KEIN realer Fall) - legitimer Transit

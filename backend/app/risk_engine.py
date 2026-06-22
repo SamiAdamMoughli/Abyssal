@@ -43,6 +43,15 @@ class Vessel:
     # abzuschalten - z. B. im synthetic-Modus. Default True.
     sanctions_check: bool = True
 
+    # Transhipment / Port-Evasion-Felder (alle optional, Default = "unbekannt").
+    # -1 / "" = Wert nicht verfuegbar (kein Signal). Nur positive Werte triggern Regeln.
+    recent_port_calls: int = -1              # Hafen-Calls letzte 30 Tage; -1 = unbekannt
+    days_since_port: float = -1.0           # Tage seit letztem Hafen; -1 = unbekannt
+    distance_to_nearest_port_nm: float = -1.0  # NM naechster Hafen; -1 = unbekannt
+    nearby_fishing_vessels: int = 0         # Fischer innerhalb 5 nm (letzte 6 h)
+    rendezvous_duration_hours: float = 0.0  # h mit anderem Schiff < 0.5 nm bei < 3 kn
+    ais_vessel_class: str = ""              # roher AIS Ship Type Code (0-99)
+
 
 @dataclass
 class RiskReason:
@@ -294,6 +303,27 @@ RULES: List[Rule] = [
     rule_eez_violation,
 ]
 
+# Transhipment-Signale (separates Modul - gleicher Vertrag wie RULES).
+# Lazy import: vermeidet zirkulaere Imports (transhipment_engine importiert Vessel).
+def _load_transhipment_rules() -> "List[Rule]":
+    from .transhipment_engine import (
+        signal_remote_reefer,
+        signal_rendezvous,
+        signal_mpa_reefer,
+        signal_port_evasion,
+        signal_dark_fleet_proximity,
+    )
+    return [
+        signal_remote_reefer,
+        signal_rendezvous,
+        signal_mpa_reefer,
+        signal_port_evasion,
+        signal_dark_fleet_proximity,
+    ]
+
+
+TRANSHIPMENT_RULES: List[Rule] = _load_transhipment_rules()
+
 
 # --------------------------------------------------------------------------- #
 # Engine
@@ -322,6 +352,37 @@ def assess(vessel: Vessel, rules: Optional[List[Rule]] = None) -> TargetAssessme
 def assess_all(vessels: List[Vessel]) -> List[TargetAssessment]:
     """Bewertet alle Schiffe (z. B. fuer die Kartendarstellung)."""
     return [assess(v) for v in vessels]
+
+
+def compound_score(vessel: Vessel) -> TargetAssessment:
+    """Volle Bewertung: alle Regeln + Transhipment-Signale + Compound-Multiplier.
+
+    Aequivalent zu assess(), aber mit RULES + TRANSHIPMENT_RULES. Wenn Remote-Reefer-
+    und Rendezvous-Signal gleichzeitig feuern, wird der Roh-Score mit 1.4 multipliziert
+    (Synergieeffekt: starke Konfidenz bei Kombination). Cap bleibt bei 100.
+
+    Backward-kompatibel: assess() bleibt unveraendert fuer alle bestehenden Aufrufe.
+    """
+    from .transhipment_engine import (
+        COMPOUND_MULTIPLIER, COMPOUND_TRIGGER_LABELS, compound_explanation,
+    )
+    all_rules = RULES + TRANSHIPMENT_RULES
+    reasons: List[RiskReason] = []
+    for rule in all_rules:
+        reason = rule(vessel)
+        if reason is not None:
+            reasons.append(reason)
+
+    raw_score = sum(r.points for r in reasons)
+
+    fired_labels = {r.label for r in reasons}
+    if COMPOUND_TRIGGER_LABELS.issubset(fired_labels):
+        reasons.append(compound_explanation(raw_score))
+        raw_score *= COMPOUND_MULTIPLIER
+
+    score = min(raw_score, SCORE_CAP)
+    reasons.sort(key=lambda r: r.points, reverse=True)
+    return TargetAssessment(vessel=vessel, score=score, reasons=reasons)
 
 
 def rank_targets(vessels: List[Vessel], top_n: int = 5) -> List[TargetAssessment]:
