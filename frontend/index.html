@@ -34,10 +34,14 @@
       --ss-orange-dark: #d94e00;
 
       /* abgeleitete Tokens (ebenfalls Variablen) */
-      --ss-amber: #ffaa00;            /* Mittelrisiko */
-      --ss-hover: #0a0a0a;            /* Card-Hover */
-      --ss-skel: #111111;            /* Skeleton-Puls */
-      --ss-loading: #333333;         /* Button-Loading */
+      --ss-amber: #ffaa00;
+      /* Mittelrisiko */
+      --ss-hover: #0a0a0a;
+      /* Card-Hover */
+      --ss-skel: #111111;
+      /* Skeleton-Puls */
+      --ss-loading: #333333;
+      /* Button-Loading */
       --ss-orange-15: rgba(244, 87, 0, 0.15);
       --ss-orange-40: rgba(244, 87, 0, 0.40);
       --ss-orange-glow: rgba(244, 87, 0, 0.55);
@@ -53,10 +57,14 @@
       --t: 120ms ease;
     }
 
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
 
-    html, body {
-      margin: 0; height: 100%;
+    html,
+    body {
+      margin: 0;
+      height: 100%;
       background: var(--ss-black);
       color: var(--ss-white);
       font-family: "Montserrat", sans-serif;
@@ -64,11 +72,28 @@
     }
 
     /* Scrollbar */
-    ::-webkit-scrollbar { width: 4px; height: 4px; background: var(--ss-black); }
-    ::-webkit-scrollbar-thumb { background: var(--ss-orange); }
-    * { scrollbar-width: thin; scrollbar-color: var(--ss-orange) var(--ss-black); }
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+      background: var(--ss-black);
+    }
 
-    h1, h2, h3, .bebas { font-family: "Bebas Neue", sans-serif; font-weight: 400; }
+    ::-webkit-scrollbar-thumb {
+      background: var(--ss-orange);
+    }
+
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--ss-orange) var(--ss-black);
+    }
+
+    h1,
+    h2,
+    h3,
+    .bebas {
+      font-family: "Bebas Neue", sans-serif;
+      font-weight: 400;
+    }
 
     /* =====================================================================
        LAYOUT
@@ -78,64 +103,194 @@
       grid-template-rows: var(--topbar-h) 1fr;
       grid-template-columns: var(--sidebar-w) 1fr;
       grid-template-areas: "topbar topbar" "sidebar map";
-      height: 100vh; width: 100vw; overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
     }
 
     /* ---------------- TOPBAR ---------------- */
     #topbar {
       grid-area: topbar;
-      display: flex; align-items: center; gap: 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
       padding: 0 18px;
       background: var(--ss-black);
       border-bottom: 2px solid var(--ss-orange);
     }
-    .logo { font-family: "Bebas Neue", sans-serif; font-size: 28px; color: var(--ss-orange); line-height: 1; }
-    .logo .skull { margin-right: 6px; }
-    .subtitle {
-      font-family: "Montserrat", sans-serif; font-size: 11px; font-weight: 600;
-      letter-spacing: 4px; color: var(--ss-white); opacity: 0.6; white-space: nowrap;
+
+    .logo {
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 28px;
+      color: var(--ss-orange);
+      line-height: 1;
     }
-    .topbar-spacer { flex: 1; }
+
+    .logo .skull {
+      margin-right: 6px;
+    }
+
+    .subtitle {
+      font-family: "Montserrat", sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 4px;
+      color: var(--ss-white);
+      opacity: 0.6;
+      white-space: nowrap;
+    }
+
+    .topbar-spacer {
+      flex: 1;
+    }
 
     .pill {
-      display: inline-flex; align-items: center; gap: 7px;
-      font-family: "Bebas Neue", sans-serif; font-size: 15px; letter-spacing: 1.5px;
-      padding: 4px 14px; border-radius: 20px; line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 15px;
+      letter-spacing: 1.5px;
+      padding: 4px 14px;
+      border-radius: 20px;
+      line-height: 1;
     }
-    .pill .dot { width: 8px; height: 8px; border-radius: 50%; }
-    .pill.live { background: var(--ss-orange); color: var(--ss-black); }
-    .pill.live .dot { background: var(--ss-black); animation: blink 1.3s infinite; }
-    .pill.syn { background: transparent; color: var(--ss-orange); border: 1px solid var(--ss-orange); }
-    .pill.syn .dot { background: var(--ss-orange); }
-    .count { font-size: 12px; color: var(--ss-w60); white-space: nowrap; }
-    .count b { color: var(--ss-orange); font-weight: 700; }
+
+    .pill .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .pill.live {
+      background: var(--ss-orange);
+      color: var(--ss-black);
+    }
+
+    .pill.live .dot {
+      background: var(--ss-black);
+      animation: blink 1.3s infinite;
+    }
+
+    .pill.syn {
+      background: transparent;
+      color: var(--ss-orange);
+      border: 1px solid var(--ss-orange);
+    }
+
+    .pill.syn .dot {
+      background: var(--ss-orange);
+    }
+
+    .count {
+      font-size: 12px;
+      color: var(--ss-w60);
+      white-space: nowrap;
+    }
+
+    .count b {
+      color: var(--ss-orange);
+      font-weight: 700;
+    }
 
     /* ---------------- SIDEBAR ---------------- */
     #sidebar {
-      grid-area: sidebar; background: var(--ss-navy);
-      display: flex; flex-direction: column; overflow: hidden;
+      grid-area: sidebar;
+      background: var(--ss-navy);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
-    .sidebar-head { padding: 14px 16px 12px; border-bottom: 1px solid var(--ss-teal); }
+
+    .sidebar-head {
+      padding: 14px 16px 12px;
+      border-bottom: 1px solid var(--ss-teal);
+    }
+
     .sidebar-head h2 {
-      margin: 0; font-size: 22px; letter-spacing: 3px; color: var(--ss-orange); line-height: 1;
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: 3px;
+      color: var(--ss-orange);
+      line-height: 1;
     }
-    .sidebar-head .sub { margin-top: 3px; font-size: 11px; color: var(--ss-w40); }
+
+    .sidebar-head .sub {
+      margin-top: 3px;
+      font-size: 11px;
+      color: var(--ss-w40);
+    }
 
     /* Date Picker */
-    .daterow { display: flex; gap: 10px; margin-top: 11px; }
-    .datefield { display: flex; flex-direction: column; gap: 3px; flex: 1; }
+    .daterow {
+      display: flex;
+      gap: 10px;
+      margin-top: 11px;
+    }
+
+    .datefield {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      flex: 1;
+    }
+
     .datefield label {
-      font-family: "Bebas Neue", sans-serif; font-size: 13px; letter-spacing: 2px;
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 13px;
+      letter-spacing: 2px;
       color: var(--ss-orange);
     }
-    input[type=date] {
-      background: var(--ss-black); border: 1px solid var(--ss-orange);
-      color: var(--ss-white); font-family: "Montserrat", sans-serif; font-size: 11px;
-      padding: 5px 7px; border-radius: 2px;
-    }
-    input[type=date]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.6; cursor: pointer; }
 
-    #cards { overflow-y: auto; padding: 12px; flex: 1; }
+    input[type=date] {
+      background: var(--ss-black);
+      border: 1px solid var(--ss-orange);
+      color: var(--ss-white);
+      font-family: "Montserrat", sans-serif;
+      font-size: 11px;
+      padding: 5px 7px;
+      border-radius: 2px;
+    }
+
+    input[type=date]::-webkit-calendar-picker-indicator {
+      filter: invert(1);
+      opacity: 0.6;
+      cursor: pointer;
+    }
+
+    .sidebar-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .sidebar-controls input,
+    .sidebar-controls select {
+      flex: 1 1 140px;
+      min-width: 0;
+      border: 1px solid var(--ss-orange);
+      border-radius: 2px;
+      background: var(--ss-black);
+      color: var(--ss-white);
+      font-family: "Montserrat", sans-serif;
+      font-size: 12px;
+      padding: 8px 10px;
+    }
+
+    .sidebar-controls input {
+      min-width: 180px;
+    }
+
+    .sidebar-controls select {
+      max-width: 190px;
+    }
+
+    #cards {
+      overflow-y: auto;
+      padding: 12px;
+      flex: 1;
+    }
 
     /* ---------------- TARGET CARD ---------------- */
     .card {
@@ -143,139 +298,418 @@
       border: 1px solid var(--ss-teal);
       border-left: 3px solid var(--ss-blue);
       border-radius: 2px;
-      padding: 10px 12px 11px; margin-bottom: 9px;
-      cursor: pointer; transition: background var(--t), box-shadow var(--t);
+      padding: 10px 12px 11px;
+      margin-bottom: 9px;
+      cursor: pointer;
+      transition: background var(--t), box-shadow var(--t);
     }
-    .card.hi  { border-left-color: var(--ss-orange); }
-    .card.mid { border-left-color: var(--ss-amber); }
-    .card.lo  { border-left-color: var(--ss-blue); }
-    .card:hover { background: var(--ss-hover); }
-    .card.hi:hover  { box-shadow: -4px 0 16px var(--ss-orange-glow); }
-    .card.mid:hover { box-shadow: -4px 0 16px var(--ss-amber-15); }
-    .card.lo:hover  { box-shadow: -4px 0 16px var(--ss-blue-15); }
 
-    .card-row1 { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .card.hi {
+      border-left-color: var(--ss-orange);
+    }
+
+    .card.mid {
+      border-left-color: var(--ss-amber);
+    }
+
+    .card.lo {
+      border-left-color: var(--ss-blue);
+    }
+
+    .card:hover {
+      background: var(--ss-hover);
+    }
+
+    .card.hi:hover {
+      box-shadow: -4px 0 16px var(--ss-orange-glow);
+    }
+
+    .card.mid:hover {
+      box-shadow: -4px 0 16px var(--ss-amber-15);
+    }
+
+    .card.lo:hover {
+      box-shadow: -4px 0 16px var(--ss-blue-15);
+    }
+
+    .card-row1 {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
     .card-name {
-      font-family: "Bebas Neue", sans-serif; font-size: 18px; letter-spacing: 0.5px;
-      color: var(--ss-white); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.1;
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 18px;
+      letter-spacing: 0.5px;
+      color: var(--ss-white);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.1;
     }
+
     .card-row2 {
-      margin-top: 5px; font-size: 12px; color: var(--ss-w70); opacity: 0.9;
-      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+      margin-top: 5px;
+      font-size: 12px;
+      color: var(--ss-w70);
+      opacity: 0.9;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
     }
-    .card-row2 .sep { opacity: 0.35; }
-    .rule-badges { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 5px; }
+
+    .card-row2 .sep {
+      opacity: 0.35;
+    }
+
+    .rule-badges {
+      margin-top: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
     .rule-badge {
-      font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 2px;
-      background: var(--ss-orange-15); border: 1px solid var(--ss-orange-40);
-      color: var(--ss-orange); white-space: nowrap;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 2px;
+      background: var(--ss-orange-15);
+      border: 1px solid var(--ss-orange-40);
+      color: var(--ss-orange);
+      white-space: nowrap;
     }
 
     /* Score Badge */
     .badge {
-      font-family: "Bebas Neue", sans-serif; font-size: 16px; letter-spacing: 1px;
-      padding: 1px 11px; border-radius: 2px; min-width: 44px; text-align: center; flex: none; line-height: 1.3;
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 16px;
+      letter-spacing: 1px;
+      padding: 1px 11px;
+      border-radius: 2px;
+      min-width: 44px;
+      text-align: center;
+      flex: none;
+      line-height: 1.3;
     }
-    .badge-hi  { background: var(--ss-orange); color: var(--ss-black); }
-    .badge-mid { background: transparent; color: var(--ss-amber); border: 1px solid var(--ss-amber); }
-    .badge-lo  { background: transparent; color: var(--ss-blue);  border: 1px solid var(--ss-blue); }
+
+    .badge-hi {
+      background: var(--ss-orange);
+      color: var(--ss-black);
+    }
+
+    .badge-mid {
+      background: transparent;
+      color: var(--ss-amber);
+      border: 1px solid var(--ss-amber);
+    }
+
+    .badge-lo {
+      background: transparent;
+      color: var(--ss-blue);
+      border: 1px solid var(--ss-blue);
+    }
 
     /* Skeleton */
     .skeleton {
-      height: 74px; border-radius: 2px; margin-bottom: 9px;
+      height: 74px;
+      border-radius: 2px;
+      margin-bottom: 9px;
       border-left: 3px solid var(--ss-teal);
       background: linear-gradient(100deg, var(--ss-navy) 30%, var(--ss-skel) 50%, var(--ss-navy) 70%);
-      background-size: 200% 100%; animation: shimmer 1.2s linear infinite;
+      background-size: 200% 100%;
+      animation: shimmer 1.2s linear infinite;
     }
 
     /* ---------------- MAP ---------------- */
-    #map { grid-area: map; height: 100%; width: 100%; background: var(--ss-black); z-index: 1; }
+    #map {
+      grid-area: map;
+      height: 100%;
+      width: 100%;
+      background: var(--ss-black);
+      z-index: 1;
+    }
 
     /* Search button (floating, top-center) */
     #search-btn {
-      position: absolute; top: calc(var(--topbar-h) + 14px); left: 50%; transform: translateX(-50%);
-      z-index: 900; display: none;
-      font-family: "Bebas Neue", sans-serif; font-size: 17px; letter-spacing: 2px;
-      background: var(--ss-orange); color: var(--ss-black);
-      border: none; border-radius: 2px; padding: 9px 22px; cursor: pointer;
-      box-shadow: 0 4px 18px var(--ss-orange-glow); transition: background var(--t);
+      position: absolute;
+      top: calc(var(--topbar-h) + 14px);
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 900;
+      display: none;
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 17px;
+      letter-spacing: 2px;
+      background: var(--ss-orange);
+      color: var(--ss-black);
+      border: none;
+      border-radius: 2px;
+      padding: 9px 22px;
+      cursor: pointer;
+      box-shadow: 0 4px 18px var(--ss-orange-glow);
+      transition: background var(--t);
     }
-    #search-btn:hover { background: var(--ss-orange-dark); }
-    #search-btn.loading { background: var(--ss-loading); color: var(--ss-orange); cursor: wait; }
-    #search-btn.show { display: block; }
+
+    #search-btn:hover {
+      background: var(--ss-orange-dark);
+    }
+
+    #search-btn.loading {
+      background: var(--ss-loading);
+      color: var(--ss-orange);
+      cursor: wait;
+    }
+
+    #search-btn.show {
+      display: block;
+    }
 
     /* Area-size warning */
     #area-warn {
-      position: absolute; top: calc(var(--topbar-h) + 56px); left: 50%; transform: translateX(-50%);
-      z-index: 900; display: none;
-      background: var(--ss-amber); color: var(--ss-black);
-      font-size: 11px; font-weight: 600; padding: 5px 12px; border-radius: 2px; max-width: 90vw;
+      position: absolute;
+      top: calc(var(--topbar-h) + 56px);
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 900;
+      display: none;
+      background: var(--ss-amber);
+      color: var(--ss-black);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 2px;
+      max-width: 90vw;
     }
 
     .map-overlay {
-      position: absolute; inset: 0; z-index: 500;
-      display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 14px;
-      background: var(--ss-black); color: var(--ss-orange);
-      font-family: "Bebas Neue", sans-serif; font-size: 18px; letter-spacing: 2px;
-      pointer-events: none; transition: opacity 250ms ease;
+      position: absolute;
+      inset: 0;
+      z-index: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 14px;
+      background: var(--ss-black);
+      color: var(--ss-orange);
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 18px;
+      letter-spacing: 2px;
+      pointer-events: none;
+      transition: opacity 250ms ease;
     }
+
     .map-overlay .spinner {
-      width: 36px; height: 36px; border-radius: 50%;
-      border: 3px solid var(--ss-teal); border-top-color: var(--ss-orange); animation: spin 0.8s linear infinite;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 3px solid var(--ss-teal);
+      border-top-color: var(--ss-orange);
+      animation: spin 0.8s linear infinite;
     }
-    .map-overlay.hidden { opacity: 0; }
+
+    .map-overlay.hidden {
+      opacity: 0;
+    }
 
     /* Error banner */
     #error-banner {
-      position: absolute; top: calc(var(--topbar-h) + 14px); left: 50%; transform: translateX(-50%);
-      z-index: 1500; display: none; max-width: 92vw;
-      background: var(--ss-red); color: var(--ss-white);
-      font-family: "Bebas Neue", sans-serif; font-size: 16px; letter-spacing: 1px;
-      padding: 9px 18px; border-radius: 2px;
+      position: absolute;
+      top: calc(var(--topbar-h) + 14px);
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1500;
+      display: none;
+      max-width: 92vw;
+      background: var(--ss-red);
+      color: var(--ss-white);
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 16px;
+      letter-spacing: 1px;
+      padding: 9px 18px;
+      border-radius: 2px;
     }
-    #error-banner code { font-family: "Montserrat", monospace; font-size: 12px; }
 
-    /* ---------------- VESSEL MARKERS ---------------- */
-    .vmarker { position: relative; display: flex; align-items: center; justify-content: center; }
-    .vmarker .vdot { width: 100%; height: 100%; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; }
-    .vmarker.hi  { color: var(--ss-orange); }
-    .vmarker.mid { color: var(--ss-amber); }
-    .vmarker.lo  { color: var(--ss-blue); }
-    .vmarker.hi::before {
-      content: ""; position: absolute; inset: -8px; border-radius: 50%;
-      border: 2px solid var(--ss-orange); animation: pulse-orange 2s ease-out infinite;
+    #error-banner code {
+      font-family: "Montserrat", monospace;
+      font-size: 12px;
+    }
+
+    /* ---------------- VESSEL MARKERS (SVG-based) ---------------- */
+    /* Leaflet DivIcon wrapper for SVG vessel icons */
+    .vessel-icon {
+      overflow: visible !important;
+      background: none !important;
+      border: none !important;
+    }
+
+    /* Pulse ring for high-risk vessels (score > 70) */
+    .vessel-icon.vessel-hi::after {
+      content: '';
+      position: absolute;
+      inset: -8px;
+      border-radius: 50%;
+      border: 2px solid #F45700;
+      animation: pulse-orange 2s ease-out infinite;
+      pointer-events: none;
     }
 
     /* ---------------- DARK POPUP ---------------- */
     .leaflet-popup-content-wrapper {
-      background: var(--ss-black); border: 1px solid var(--ss-orange);
-      border-radius: 0; color: var(--ss-white);
+      background: var(--ss-black);
+      border: 1px solid var(--ss-orange);
+      border-radius: 0;
+      color: var(--ss-white);
     }
-    .leaflet-popup-tip { background: var(--ss-black); border: 1px solid var(--ss-orange); }
-    .leaflet-popup-content { margin: 13px 15px; font-size: 12px; line-height: 1.5; }
-    .pop-name { font-family: "Bebas Neue", sans-serif; font-size: 20px; letter-spacing: 1px; color: var(--ss-orange); line-height: 1; }
-    .pop-score { font-family: "Bebas Neue", sans-serif; font-size: 36px; line-height: 1; margin: 4px 0; }
-    .pop-score.hi { color: var(--ss-orange); } .pop-score.mid { color: var(--ss-amber); } .pop-score.lo { color: var(--ss-blue); }
-    .pop-mmsi { font-family: "Montserrat", monospace; font-size: 10.5px; color: var(--ss-w60); letter-spacing: 0.5px; }
-    .pop-rules { margin: 9px 0 0; padding: 0; list-style: none; }
-    .pop-rules li { margin-bottom: 6px; color: var(--ss-w70); }
-    .pop-rules .b { color: var(--ss-orange); }
-    a.leaflet-popup-close-button { color: var(--ss-w60) !important; }
-    .leaflet-control-attribution {
-      background: var(--ss-black) !important; color: var(--ss-w30) !important;
-      font-family: "Montserrat", sans-serif !important; font-size: 9px !important; border: none !important;
-    }
-    .leaflet-control-attribution a { color: var(--ss-blue) !important; }
-    .leaflet-bar a { background: var(--ss-navy); color: var(--ss-orange); border-color: var(--ss-teal); }
 
-    .fade-in { animation: fade 0.35s ease both; }
+    .leaflet-popup-tip {
+      background: var(--ss-black);
+      border: 1px solid var(--ss-orange);
+    }
+
+    .leaflet-popup-content {
+      margin: 13px 15px;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .pop-name {
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 20px;
+      letter-spacing: 1px;
+      color: var(--ss-orange);
+      line-height: 1;
+    }
+
+    .pop-score {
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 36px;
+      line-height: 1;
+      margin: 4px 0;
+    }
+
+    .pop-score.hi {
+      color: var(--ss-orange);
+    }
+
+    .pop-score.mid {
+      color: var(--ss-amber);
+    }
+
+    .pop-score.lo {
+      color: var(--ss-blue);
+    }
+
+    .pop-mmsi {
+      font-family: "Montserrat", monospace;
+      font-size: 10.5px;
+      color: var(--ss-w60);
+      letter-spacing: 0.5px;
+    }
+
+    .pop-type {
+      font-family: "Montserrat", sans-serif;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.8px;
+      color: var(--ss-cyan);
+      text-transform: uppercase;
+      margin-top: 3px;
+    }
+
+    .pop-rules {
+      margin: 9px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .pop-rules li {
+      margin-bottom: 6px;
+      color: var(--ss-w70);
+    }
+
+    .pop-rules .b {
+      color: var(--ss-orange);
+    }
+
+    a.leaflet-popup-close-button {
+      color: var(--ss-w60) !important;
+    }
+
+    .leaflet-control-attribution {
+      background: var(--ss-black) !important;
+      color: var(--ss-w30) !important;
+      font-family: "Montserrat", sans-serif !important;
+      font-size: 9px !important;
+      border: none !important;
+    }
+
+    .leaflet-control-attribution a {
+      color: var(--ss-blue) !important;
+    }
+
+    .leaflet-bar a {
+      background: var(--ss-navy);
+      color: var(--ss-orange);
+      border-color: var(--ss-teal);
+    }
+
+    .fade-in {
+      animation: fade 0.35s ease both;
+    }
 
     /* ---------------- ANIMATIONS ---------------- */
-    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    @keyframes shimmer { to { background-position: -200% 0; } }
-    @keyframes pulse-orange { 0% { transform: scale(1); opacity: 0.6; } 100% { transform: scale(2); opacity: 0; } }
-    @keyframes fade { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.2;
+      }
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @keyframes shimmer {
+      to {
+        background-position: -200% 0;
+      }
+    }
+
+    @keyframes pulse-orange {
+      0% {
+        transform: scale(1);
+        opacity: 0.6;
+      }
+
+      100% {
+        transform: scale(2);
+        opacity: 0;
+      }
+    }
+
+    @keyframes fade {
+      from {
+        opacity: 0;
+        transform: translateY(5px);
+      }
+
+      to {
+        opacity: 1;
+        transform: none;
+      }
+    }
 
     /* ---------------- MOBILE ---------------- */
     @media (max-width: 768px) {
@@ -284,59 +718,326 @@
         grid-template-columns: 1fr;
         grid-template-areas: "topbar" "map" "sidebar";
       }
-      .subtitle { display: none; }
-      .count { display: none; }
-      #search-btn { width: calc(100% - 24px); height: 48px; font-size: 18px; }
-      .card { padding: 9px 10px; }
-      .toggle-group { display: none; }
+
+      .subtitle {
+        display: none;
+      }
+
+      .count {
+        display: none;
+      }
+
+      #search-btn {
+        width: calc(100% - 24px);
+        height: 48px;
+        font-size: 18px;
+      }
+
+      .card {
+        padding: 9px 10px;
+      }
+
+      .toggle-group {
+        display: none;
+      }
     }
 
     /* ---------------- LAYER TOGGLE (Topbar) ---------------- */
-    .toggle-group { display: flex; gap: 0; }
+    .toggle-group {
+      display: flex;
+      gap: 0;
+    }
+
     .toggle-btn {
-      font-family: "Bebas Neue", sans-serif; font-size: 14px; letter-spacing: 1px;
-      padding: 4px 11px; cursor: pointer; line-height: 1.3;
-      background: transparent; color: var(--ss-orange);
-      border: 1px solid var(--ss-orange); border-right: none;
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 14px;
+      letter-spacing: 1px;
+      padding: 4px 11px;
+      cursor: pointer;
+      line-height: 1.3;
+      background: transparent;
+      color: var(--ss-orange);
+      border: 1px solid var(--ss-orange);
+      border-right: none;
       transition: background var(--t), color var(--t);
     }
-    .toggle-btn:last-child { border-right: 1px solid var(--ss-orange); }
-    .toggle-btn.active { background: var(--ss-orange); color: var(--ss-black); }
+
+    .toggle-btn:last-child {
+      border-right: 1px solid var(--ss-orange);
+    }
+
+    .toggle-btn.active {
+      background: var(--ss-orange);
+      color: var(--ss-black);
+    }
 
     /* In-MPA badge (sidebar card + popup) */
     .mpa-flag {
-      display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 0.5px;
-      padding: 1px 6px; border-radius: 2px; margin-top: 6px;
-      background: var(--ss-orange); color: var(--ss-black);
+      display: inline-block;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      padding: 1px 6px;
+      border-radius: 2px;
+      margin-top: 6px;
+      background: var(--ss-orange);
+      color: var(--ss-black);
     }
+
     .pop-mpa {
-      display: inline-block; margin-top: 8px; padding: 2px 8px; border-radius: 2px;
-      font-family: "Bebas Neue", sans-serif; font-size: 13px; letter-spacing: 1px;
-      background: var(--ss-red); color: var(--ss-white);
+      display: inline-block;
+      margin-top: 8px;
+      padding: 2px 8px;
+      border-radius: 2px;
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 13px;
+      letter-spacing: 1px;
+      background: var(--ss-red);
+      color: var(--ss-white);
     }
 
     /* MPA polygon popup */
-    .mpa-popup { font-family: "Montserrat", sans-serif; color: var(--ss-white); }
-    .mpa-name {
-      font-family: "Bebas Neue", sans-serif; font-size: 16px;
-      color: var(--ss-cyan); letter-spacing: 1px;
+    .mpa-popup {
+      font-family: "Montserrat", sans-serif;
+      color: var(--ss-white);
     }
-    .mpa-cat, .mpa-area { font-size: 11px; opacity: 0.6; }
+
+    .mpa-name {
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 16px;
+      color: var(--ss-cyan);
+      letter-spacing: 1px;
+    }
+
+    .mpa-cat,
+    .mpa-area {
+      font-size: 11px;
+      opacity: 0.6;
+    }
 
     /* MPA loading indicator (bottom-left) */
     #mpa-loading {
-      position: absolute; left: 12px; bottom: 26px; z-index: 700; display: none;
-      font-family: "Montserrat", sans-serif; font-size: 11px; color: var(--ss-cyan);
-      background: var(--ss-black); padding: 3px 9px; border: 1px solid var(--ss-teal);
+      position: absolute;
+      left: 12px;
+      bottom: 26px;
+      z-index: 700;
+      display: none;
+      font-family: "Montserrat", sans-serif;
+      font-size: 11px;
+      color: var(--ss-cyan);
+      background: var(--ss-black);
+      padding: 3px 9px;
+      border: 1px solid var(--ss-teal);
     }
-    #mpa-loading.show { display: block; }
+
+    #mpa-loading.show {
+      display: block;
+    }
 
     /* MPA polygon fade-in */
-    .leaflet-interactive { transition: fill-opacity 350ms ease, stroke-opacity 350ms ease; }
+    .leaflet-interactive {
+      transition: fill-opacity 350ms ease, stroke-opacity 350ms ease;
+    }
+
+    /* ==================================================================
+       ONBOARDING SCREEN (Dark Overlay Initialization)
+       ================================================================== */
+    #onboarding-screen {
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(135deg, var(--ss-black) 0%, var(--ss-navy) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 5000;
+      opacity: 1;
+      transition: opacity 500ms ease;
+    }
+
+    #onboarding-screen.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .onboarding-box {
+      max-width: 600px;
+      width: 90%;
+      padding: 48px 40px;
+      background: var(--ss-navy);
+      border: 2px solid var(--ss-orange);
+      border-radius: 0;
+      text-align: center;
+      box-shadow: 0 20px 80px rgba(0, 0, 0, 0.8);
+    }
+
+    .onboarding-title {
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 42px;
+      letter-spacing: 2px;
+      color: var(--ss-orange);
+      margin: 0 0 12px 0;
+      line-height: 1;
+    }
+
+    .onboarding-subtitle {
+      font-size: 14px;
+      color: var(--ss-w60);
+      margin: 0 0 32px 0;
+      letter-spacing: 0.5px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+      text-align: left;
+    }
+
+    .form-group label {
+      display: block;
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 13px;
+      letter-spacing: 1px;
+      color: var(--ss-orange);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: 10px 12px;
+      background: var(--ss-black);
+      border: 1px solid var(--ss-teal);
+      color: var(--ss-white);
+      font-family: "Montserrat", sans-serif;
+      font-size: 14px;
+      border-radius: 0;
+      box-sizing: border-box;
+      transition: border-color 200ms ease;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: var(--ss-orange);
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .form-row .form-group {
+      margin-bottom: 0;
+    }
+
+    .onboarding-buttons {
+      display: flex;
+      gap: 12px;
+      margin-top: 32px;
+    }
+
+    .onboarding-buttons button {
+      flex: 1;
+      padding: 12px 16px;
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 14px;
+      letter-spacing: 1px;
+      border: none;
+      border-radius: 0;
+      cursor: pointer;
+      transition: all 200ms ease;
+      text-transform: uppercase;
+    }
+
+    #btn-use-location {
+      background: var(--ss-teal);
+      color: var(--ss-white);
+      border: 1px solid var(--ss-teal);
+    }
+
+    #btn-use-location:hover:not(:disabled) {
+      background: var(--ss-cyan);
+      border-color: var(--ss-cyan);
+      color: var(--ss-black);
+    }
+
+    #btn-use-location:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #btn-initialize {
+      background: var(--ss-orange);
+      color: var(--ss-black);
+      border: 2px solid var(--ss-orange);
+      font-weight: 600;
+    }
+
+    #btn-initialize:hover:not(:disabled) {
+      background: var(--ss-orange-dark);
+      border-color: var(--ss-orange-dark);
+    }
+
+    #btn-initialize:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .onboarding-info {
+      font-size: 12px;
+      color: var(--ss-w40);
+      margin-top: 16px;
+      line-height: 1.5;
+    }
+
+    .onboarding-info strong {
+      color: var(--ss-cyan);
+    }
   </style>
 </head>
 
 <body>
+  <!-- ONBOARDING SCREEN -->
+  <div id="onboarding-screen">
+    <div class="onboarding-box">
+      <div class="onboarding-title">SPECIFY YOUR OPERATION SCOPE</div>
+      <div class="onboarding-subtitle">Define target area and search parameters</div>
+
+      <form id="onboarding-form">
+        <!-- Latitude / Longitude -->
+        <div class="form-row">
+          <div class="form-group">
+            <label for="onboarding-lat">Latitude</label>
+            <input type="number" id="onboarding-lat" placeholder="e.g., -0.5" step="0.0001" />
+          </div>
+          <div class="form-group">
+            <label for="onboarding-lon">Longitude</label>
+            <input type="number" id="onboarding-lon" placeholder="e.g., -90.5" step="0.0001" />
+          </div>
+        </div>
+
+        <!-- Radius -->
+        <div class="form-group">
+          <label for="onboarding-radius">Search Radius (nautical miles)</label>
+          <input type="number" id="onboarding-radius" placeholder="e.g., 50" min="1" max="500" step="1" value="50" />
+        </div>
+
+        <!-- Buttons -->
+        <div class="onboarding-buttons">
+          <button type="button" id="btn-use-location" class="btn-location">📍 USE CURRENT LOCATION</button>
+          <button type="submit" id="btn-initialize" class="btn-init">INITIALIZE SCOPE</button>
+        </div>
+
+        <div class="onboarding-info">
+          <strong>Tip:</strong> Enter your target coordinates or use the geolocation button to auto-detect your current
+          position. The search radius defines how far from your location to scan for vessels.
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="app">
     <!-- TOPBAR -->
     <header id="topbar">
@@ -355,11 +1056,22 @@
     <!-- SIDEBAR -->
     <aside id="sidebar">
       <div class="sidebar-head">
-        <h2>TOP TARGETS</h2>
-        <div class="sub" id="sidebar-sub">Ranked by risk score</div>
+        <h2>VESSEL LIST</h2>
+        <div class="sub" id="sidebar-sub">Search and sort all vessels</div>
         <div class="daterow">
           <div class="datefield"><label>FROM</label><input type="date" id="date-from" /></div>
           <div class="datefield"><label>TO</label><input type="date" id="date-to" /></div>
+        </div>
+        <div class="sidebar-controls">
+          <input id="search-input" type="search" placeholder="Search name, MMSI, flag…" />
+          <select id="sort-select" aria-label="Sort vessels">
+            <option value="score_desc">Score ↓</option>
+            <option value="score_asc">Score ↑</option>
+            <option value="name_asc">Name A→Z</option>
+            <option value="name_desc">Name Z→A</option>
+            <option value="flag_asc">Flag A→Z</option>
+            <option value="mpa_first">In MPA first</option>
+          </select>
         </div>
       </div>
       <div id="cards"></div>
@@ -384,10 +1096,10 @@
     // HELFER
     // ==================================================================
     const ISO3to2 = {
-      ECU:'EC',CHN:'CN',PAN:'PA',USA:'US',POL:'PL',FRA:'FR',GBR:'GB',VEN:'VE',
-      NGA:'NG',GNQ:'GQ',TGO:'TG',ESP:'ES',KOR:'KR',TWN:'TW',JPN:'JP',RUS:'RU',
-      PRT:'PT',ITA:'IT',MEX:'MX',PER:'PE',CHL:'CL',COL:'CO',IDN:'ID',VNM:'VN',
-      BLZ:'BZ',COM:'KM',STP:'ST',LBR:'LR',MHL:'MH',HKG:'HK',ATG:'AG',MLT:'MT',SEN:'SN'
+      ECU: 'EC', CHN: 'CN', PAN: 'PA', USA: 'US', POL: 'PL', FRA: 'FR', GBR: 'GB', VEN: 'VE',
+      NGA: 'NG', GNQ: 'GQ', TGO: 'TG', ESP: 'ES', KOR: 'KR', TWN: 'TW', JPN: 'JP', RUS: 'RU',
+      PRT: 'PT', ITA: 'IT', MEX: 'MX', PER: 'PE', CHL: 'CL', COL: 'CO', IDN: 'ID', VNM: 'VN',
+      BLZ: 'BZ', COM: 'KM', STP: 'ST', LBR: 'LR', MHL: 'MH', HKG: 'HK', ATG: 'AG', MLT: 'MT', SEN: 'SN'
     };
     function flagEmoji(iso3) {
       const c = ISO3to2[(iso3 || '').toUpperCase()];
@@ -396,6 +1108,441 @@
     }
     function riskClass(s) { return s > 60 ? 'hi' : (s >= 30 ? 'mid' : 'lo'); }
     function fmtDate(d) { return d.toISOString().slice(0, 10); }
+
+    // ==================================================================
+    // BBOX CALCULATION (from center + radius)
+    // ==================================================================
+    // 1 nautical mile = 1.852 km
+    function nmToKm(nm) { return nm * 1.852; }
+    // 1 degree latitude ≈ 111 km
+    // 1 degree longitude ≈ 111 * cos(latitude) km
+    function calculateBbox(centerLat, centerLon, radiusNm) {
+      const radiusKm = nmToKm(radiusNm);
+      const latDelta = radiusKm / 111.0;
+      const lonDelta = radiusKm / (111.0 * Math.cos(centerLat * Math.PI / 180));
+      return {
+        min_lat: centerLat - latDelta,
+        max_lat: centerLat + latDelta,
+        min_lon: centerLon - lonDelta,
+        max_lon: centerLon + lonDelta,
+        center_lat: centerLat,
+        center_lon: centerLon,
+        radius_nm: radiusNm,
+      };
+    }
+
+    // ==================================================================
+    // GEOLOCATION UTILITY
+    // ==================================================================
+    function getCurrentLocation() {
+      return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject(new Error('Geolocation not supported by this browser'));
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            resolve({
+              lat: position.coords.latitude,
+              lon: position.coords.longitude,
+              accuracy: position.coords.accuracy,
+            });
+          },
+          (error) => {
+            reject(new Error(`Geolocation failed: ${error.message}`));
+          },
+          { timeout: 10000, enableHighAccuracy: false }
+        );
+      });
+    }
+
+    // ==================================================================
+    // ONBOARDING STATE & CONTROL
+    // ==================================================================
+    let onboardingComplete = false;
+
+    function hideOnboarding() {
+      const screen = document.getElementById('onboarding-screen');
+      screen.classList.add('hidden');
+      onboardingComplete = true;
+    }
+
+    function showOnboardingError(msg) {
+      const form = document.getElementById('onboarding-form');
+      let errorEl = form.querySelector('.onboarding-error');
+      if (!errorEl) {
+        errorEl = document.createElement('div');
+        errorEl.className = 'onboarding-error';
+        errorEl.style.cssText = 'color:var(--ss-red);font-size:12px;margin-top:12px;text-align:center;';
+        form.appendChild(errorEl);
+      }
+      errorEl.textContent = msg;
+    }
+
+    // ==================================================================
+    // ONBOARDING FORM HANDLERS
+    // ==================================================================
+    (function setupOnboarding() {
+      const form = document.getElementById('onboarding-form');
+      const btnUseLocation = document.getElementById('btn-use-location');
+      const btnInitialize = document.getElementById('btn-initialize');
+      const latInput = document.getElementById('onboarding-lat');
+      const lonInput = document.getElementById('onboarding-lon');
+      const radiusInput = document.getElementById('onboarding-radius');
+
+      // Use Current Location button
+      btnUseLocation.addEventListener('click', async () => {
+        btnUseLocation.disabled = true;
+        btnUseLocation.textContent = '⏳ DETECTING…';
+        try {
+          const loc = await getCurrentLocation();
+          latInput.value = loc.lat.toFixed(4);
+          lonInput.value = loc.lon.toFixed(4);
+          showOnboardingError('');
+          btnUseLocation.textContent = '✓ LOCATION FOUND';
+        } catch (err) {
+          showOnboardingError(err.message);
+          btnUseLocation.textContent = '📍 USE CURRENT LOCATION';
+        } finally {
+          btnUseLocation.disabled = false;
+        }
+      });
+
+      // Initialize Scope button (form submit)
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const lat = parseFloat(latInput.value);
+        const lon = parseFloat(lonInput.value);
+        const radius = parseFloat(radiusInput.value);
+
+        if (isNaN(lat) || isNaN(lon) || isNaN(radius)) {
+          showOnboardingError('Please enter valid latitude, longitude, and radius.');
+          return;
+        }
+        if (radius <= 0 || radius > 500) {
+          showOnboardingError('Radius must be between 1 and 500 nautical miles.');
+          return;
+        }
+
+        try {
+          btnInitialize.disabled = true;
+          btnInitialize.textContent = '⏳ INITIALIZING…';
+          showOnboardingError('');
+
+          const bbox = calculateBbox(lat, lon, radius);
+          const dates = currentDates();
+          await loadData({
+            min_lat: bbox.min_lat,
+            max_lat: bbox.max_lat,
+            min_lon: bbox.min_lon,
+            max_lon: bbox.max_lon,
+            start: dates.start,
+            end: dates.end,
+          });
+
+          // Center map and adjust zoom based on radius
+          const zoomLevel = Math.max(7, 20 - Math.log2(radius / 10));
+          map.flyTo([lat, lon], zoomLevel, { duration: 0.8 });
+
+          hideOnboarding();
+          ready = true;
+        } catch (err) {
+          showOnboardingError(err.message || 'Failed to initialize. Please try again.');
+          btnInitialize.textContent = 'INITIALIZE SCOPE';
+          btnInitialize.disabled = false;
+        }
+      });
+    })();
+
+    let vesselsCache = [];
+    let currentFilter = '';
+    let currentSort = 'score_desc';
+
+    function matchesSearch(v, term) {
+      if (!term) return true;
+      const q = term.toLowerCase();
+      return [
+        v.name,
+        String(v.mmsi),
+        v.flag,
+        v.top_reason?.label,
+        (v.reasons || []).map(r => r.label).join(' ')
+      ].some(value => value && value.toLowerCase().includes(q));
+    }
+
+    function sortVessels(a, b) {
+      if (currentSort === 'score_desc') return b.score - a.score;
+      if (currentSort === 'score_asc') return a.score - b.score;
+      if (currentSort === 'name_asc') {
+        return String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' });
+      }
+      if (currentSort === 'name_desc') {
+        return String(b.name || '').localeCompare(String(a.name || ''), undefined, { sensitivity: 'base' });
+      }
+      if (currentSort === 'flag_asc') {
+        const cmp = String(a.flag || '').localeCompare(String(b.flag || ''), undefined, { sensitivity: 'base' });
+        return cmp || b.score - a.score;
+      }
+      if (currentSort === 'mpa_first') {
+        const aMpa = a.in_protected_area ? 0 : 1;
+        const bMpa = b.in_protected_area ? 0 : 1;
+        return aMpa - bMpa || b.score - a.score;
+      }
+      return b.score - a.score;
+    }
+
+    function getVisibleVessels() {
+      return vesselsCache
+        .filter(v => matchesSearch(v, currentFilter))
+        .slice()
+        .sort(sortVessels);
+    }
+
+    const DEFAULT_SOURCE = 'gfw';
+    let currentSource = DEFAULT_SOURCE;
+    let currentParams = null;
+    const refreshIntervalMs = 3000;
+    let refreshTimer = null;
+
+    // ==================================================================
+    // VESSEL CATEGORY SYSTEM
+    // 4 parent categories, each with named subcategories.
+    // vessel_type holds the subcategory; category is derived at display time.
+    // ==================================================================
+    const VESSEL_CATEGORIES = {
+      // Tanker is its own category → Capsule shape (per spec)
+      tanker:      new Set(['tanker']),
+      commercial:  new Set(['container', 'bulk', 'ro_ro', 'cargo']),
+      fishing:     new Set(['trawler', 'longliner', 'purse_seiner', 'reefer', 'fishing', 'whaling']),
+      enforcement: new Set(['coast_guard', 'naval', 'ngo', 'patrol', 'enforcement']),
+      support:     new Set(['research', 'tug', 'supply', 'icebreaker', 'support']),
+    };
+
+    const CATEGORY_LABELS = {
+      tanker:      'Tanker',
+      commercial:  'Commercial Fleet',
+      fishing:     'Extractive & Fishing',
+      enforcement: 'Enforcement & State',
+      support:     'Support & Special',
+      unknown:     'Unknown',
+    };
+
+    const SUBTYPE_LABELS = {
+      // Commercial Fleet
+      container: 'Container Ship', bulk: 'Bulk Carrier',
+      tanker: 'Tanker', ro_ro: 'Ro-Ro Carrier', cargo: 'Cargo Ship',
+      // Extractive & Fishing
+      trawler: 'Trawler', longliner: 'Longliner', purse_seiner: 'Purse Seiner',
+      reefer: 'Factory / Reefer', fishing: 'Fishing Vessel', whaling: 'Whaling Vessel',
+      // Enforcement & State
+      coast_guard: 'Coast Guard', naval: 'Naval Warship',
+      ngo: 'NGO Vessel', patrol: 'Patrol Vessel', enforcement: 'Enforcement',
+      // Support & Special
+      research: 'Research Vessel', tug: 'Tugboat',
+      supply: 'Supply Ship', icebreaker: 'Icebreaker', support: 'Support Vessel',
+    };
+
+    function vesselCategoryId(type) {
+      for (const [catId, types] of Object.entries(VESSEL_CATEGORIES)) {
+        if (types.has(type)) return catId;
+      }
+      return 'unknown';
+    }
+
+    function subtypeLabel(type) {
+      return SUBTYPE_LABELS[type] || 'Unknown';
+    }
+
+    function categoryLabel(type) {
+      return CATEGORY_LABELS[vesselCategoryId(type)];
+    }
+
+    // SVG fill + glow color (Task 2): Green 0–30, Yellow 31–70, Red 71–100
+    // Red = SS-orange (#F45700) to stay on-brand; green/yellow hardcoded
+    // (CSS vars not available inside SVG fill attributes).
+    function riskFill(score) {
+      if (score <= 30) return { fill: '#22c55e', glow: 'rgba(34,197,94,0.65)' };
+      if (score <= 70) return { fill: '#ffaa00', glow: 'rgba(255,170,0,0.65)' };
+      return { fill: css('--ss-orange'), glow: css('--ss-orange-glow') };
+    }
+
+    // SVG shape per category (Task 1 + 2):
+    //   Tanker      → Capsule  (pill: fully-rounded rectangle)
+    //   Commercial  → Elongated Rectangle (sharp corners)
+    //   Fishing     → Diamond  (4-point polygon)
+    //   Enforcement → Triangle (upward-pointing)
+    //   Support     → Rounded Rect (shorter capsule variant)
+    //   Unknown     → Circle
+    function vesselShape(type, fill, edgeStroke) {
+      const cat = vesselCategoryId(type);
+      switch (cat) {
+        case 'tanker':          // Capsule — pill shape
+          return {
+            inner: `<rect x="1" y="4" width="32" height="12" rx="6" fill="${fill}" stroke="${edgeStroke}" stroke-width="1"/>`,
+            w: 34, h: 20,
+          };
+        case 'commercial':      // Elongated Rectangle — sharp bow/stern
+          return {
+            inner: `<polygon points="1,4 5,1 29,1 33,4 33,14 29,17 5,17 1,14" fill="${fill}" stroke="${edgeStroke}" stroke-width="1"/>`,
+            w: 34, h: 18,
+          };
+        case 'fishing':         // Diamond — 4-point
+          return {
+            inner: `<polygon points="11,1 21,11 11,21 1,11" fill="${fill}" stroke="${edgeStroke}" stroke-width="1"/>`,
+            w: 22, h: 22,
+          };
+        case 'enforcement':     // Triangle — upward-pointing
+          return {
+            inner: `<polygon points="11,2 21,20 1,20" fill="${fill}" stroke="${edgeStroke}" stroke-width="1"/>`,
+            w: 22, h: 22,
+          };
+        case 'support':         // Rounded Rect — softer than commercial
+          return {
+            inner: `<rect x="1" y="3" width="26" height="12" rx="4" fill="${fill}" stroke="${edgeStroke}" stroke-width="1"/>`,
+            w: 28, h: 18,
+          };
+        default:                // Circle — unknown type
+          return {
+            inner: `<circle cx="10" cy="10" r="9" fill="${fill}" stroke="${edgeStroke}" stroke-width="1"/>`,
+            w: 20, h: 20,
+          };
+      }
+    }
+
+    // Builds a Leaflet DivIcon: SVG shape + risk color + glow + hi-risk pulse ring.
+    function getVesselSvgIcon(v) {
+      const score = v.score || 0;
+      const type = String(v.vessel_type || 'unknown').toLowerCase();
+      const { fill, glow } = riskFill(score);
+      const edgeStroke = 'rgba(255,255,255,0.4)';
+      const { inner, w, h } = vesselShape(type, fill, edgeStroke);
+      const riskCls = score > 70 ? 'vessel-hi' : (score > 30 ? 'vessel-mid' : 'vessel-lo');
+      const svgHtml = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" ` +
+                      `style="filter:drop-shadow(0 0 4px ${glow});overflow:visible">${inner}</svg>`;
+      return L.divIcon({
+        className: `vessel-icon ${riskCls}`,
+        html: svgHtml,
+        iconSize: [w, h],
+        iconAnchor: [w / 2, h / 2],
+      });
+    }
+
+    function createMarkerForVessel(v) {
+      const marker = L.marker([v.lat, v.lon], { icon: getVesselSvgIcon(v) });
+      marker.bindPopup(popupHtml(v), { maxWidth: 300 });
+      let ring = null;
+      if (v.in_protected_area) {
+        ring = L.circleMarker([v.lat, v.lon], {
+          radius: radiusFor(v) * 3,
+          color: css('--ss-orange'), weight: 1, fillOpacity: 0, dashArray: '3 3'
+        }).addTo(ringLayer);
+      }
+      marker.addTo(markerLayer);
+      return { marker, ring, data: v };
+    }
+
+    function updateMarkerForVessel(v, entry) {
+      entry.marker.setLatLng([v.lat, v.lon]);
+      entry.marker.setIcon(getVesselSvgIcon(v));
+      entry.marker.bindPopup(popupHtml(v), { maxWidth: 300 });
+      if (v.in_protected_area) {
+        if (entry.ring) {
+          entry.ring.setLatLng([v.lat, v.lon]);
+        } else {
+          entry.ring = L.circleMarker([v.lat, v.lon], {
+            radius: radiusFor(v) * 3,
+            color: css('--ss-orange'), weight: 1, fillOpacity: 0, dashArray: '3 3'
+          }).addTo(ringLayer);
+        }
+      } else if (entry.ring) {
+        ringLayer.removeLayer(entry.ring);
+        entry.ring = null;
+      }
+      entry.data = v;
+    }
+
+    function syncMarkers(vessels) {
+      const nextMmsi = new Set();
+      vessels.forEach(v => {
+        nextMmsi.add(v.mmsi);
+        const existing = markersByMmsi[v.mmsi];
+        if (existing) {
+          updateMarkerForVessel(v, existing);
+        } else {
+          markersByMmsi[v.mmsi] = createMarkerForVessel(v);
+        }
+      });
+      Object.keys(markersByMmsi).forEach(mmsi => {
+        if (!nextMmsi.has(mmsi)) {
+          const existing = markersByMmsi[mmsi];
+          markerLayer.removeLayer(existing.marker);
+          if (existing.ring) {
+            ringLayer.removeLayer(existing.ring);
+          }
+          delete markersByMmsi[mmsi];
+        }
+      });
+    }
+
+    function buildQuery(params) {
+      const q = new URLSearchParams({ source: currentSource });
+      if (params) {
+        q.set('min_lat', params.min_lat.toFixed(4));
+        q.set('max_lat', params.max_lat.toFixed(4));
+        q.set('min_lon', params.min_lon.toFixed(4));
+        q.set('max_lon', params.max_lon.toFixed(4));
+        if (params.start) q.set('start_date', params.start);
+        if (params.end) q.set('end_date', params.end);
+      }
+      return q.toString();
+    }
+
+    function startAutoRefresh() {
+      if (refreshTimer) {
+        clearInterval(refreshTimer);
+      }
+      refreshTimer = setInterval(() => {
+        if (currentParams) {
+          refreshVessels();
+        }
+      }, refreshIntervalMs);
+    }
+
+    async function fetchVessels(params) {
+      const qs = buildQuery(params);
+      const res = await fetch(`${API_URL}/api/vessels?${qs}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || `HTTP ${res.status}`);
+      }
+      return res.json();
+    }
+
+    let isRefreshing = false;
+    async function refreshVessels() {
+      // Overlap-Schutz: beim 3s-Loop koennen GFW-Requests laenger als das
+      // Intervall dauern - keine parallelen Abrufe stapeln.
+      if (isRefreshing) return;
+      isRefreshing = true;
+      try {
+        const vData = await fetchVessels(currentParams);
+        if (!vData || !Array.isArray(vData.vessels)) {
+          return;
+        }
+        vesselsCache = vData.vessels;
+        syncMarkers(vData.vessels);
+        renderCards();
+        const inMpa = vesselsCache.filter(v => v.in_protected_area).length;
+        document.getElementById('vessel-count').textContent = vData.count;
+        document.getElementById('mpa-count').innerHTML = inMpa ? ` · <b>${inMpa} IN MPAs</b>` : '';
+        document.getElementById('sidebar-sub').textContent =
+          `Showing ${getVisibleVessels().length} of ${vesselsCache.length} vessels`;
+      } catch (err) {
+        console.warn('Auto-refresh failed:', err.message || err);
+      } finally {
+        isRefreshing = false;
+      }
+    }
 
     // Date Picker: Default letzte 7 Tage
     (function initDates() {
@@ -426,28 +1573,9 @@
       if (c === 'mid') return 6 + v.score / 15;
       return 5;
     }
-    function vesselMarker(v) {
-      const cls = riskClass(v.score);
-      const d = Math.round(2 * radiusFor(v));
-      // Schiff IN Schutzgebiet -> zusaetzlicher orangefarbener gestrichelter Ring
-      // (circleMarker = pixelbasiert, Radius = Marker-Radius * 3, mitzoomend)
-      if (v.in_protected_area) {
-        L.circleMarker([v.lat, v.lon], {
-          radius: radiusFor(v) * 3,
-          color: css('--ss-orange'), weight: 1, fillOpacity: 0, dashArray: '3 3'
-        }).addTo(ringLayer);
-      }
-      const icon = L.divIcon({
-        className: '',
-        html: `<div class="vmarker ${cls}" style="width:${d}px;height:${d}px"><span class="vdot"></span></div>`,
-        iconSize: [d, d], iconAnchor: [d / 2, d / 2]
-      });
-      const m = L.marker([v.lat, v.lon], { icon });
-      m.bindPopup(popupHtml(v), { maxWidth: 300 });
-      return m;
-    }
     function popupHtml(v) {
       const cls = riskClass(v.score);
+      const type = String(v.vessel_type || 'unknown').toLowerCase();
       const rules = (v.reasons || []).map(r =>
         `<li><span class="b">▸ ${r.label} +${r.points}</span><br>${r.detail || ''}</li>`).join('');
       const mpaBadge = v.in_protected_area ? `<div class="pop-mpa">⚠ IN PROTECTED AREA</div>` : '';
@@ -455,6 +1583,7 @@
         <div class="pop-name">${v.name}</div>
         <div class="pop-score ${cls}">${v.score.toFixed(1)}</div>
         <div class="pop-mmsi">MMSI ${v.mmsi} · ${flagEmoji(v.flag)} ${v.flag} · ${v.speed_knots.toFixed(1)} KN</div>
+        <div class="pop-type">${categoryLabel(type)} · ${subtypeLabel(type)}</div>
         ${mpaBadge}
         ${rules ? `<ul class="pop-rules">${rules}</ul>` : `<div class="pop-mmsi" style="margin-top:8px">No risk reasons.</div>`}
       `;
@@ -462,7 +1591,8 @@
     function focusVessel(mmsi) {
       const e = markersByMmsi[mmsi];
       if (!e) return;
-      map.flyTo(e.latlng, Math.max(map.getZoom(), 9), { duration: 0.5 });
+      const latlng = e.marker.getLatLng();
+      map.flyTo(latlng, Math.max(map.getZoom(), 9), { duration: 0.5 });
       e.marker.openPopup();
     }
 
@@ -473,18 +1603,18 @@
       document.getElementById('cards').innerHTML =
         '<div class="skeleton"></div>'.repeat(4);
     }
-    function renderCards(vessels) {
+    function renderCards() {
       const c = document.getElementById('cards');
       c.innerHTML = '';
-      const sorted = [...vessels].sort((a, b) => b.score - a.score);
-      if (!sorted.length) {
-        c.innerHTML = '<div class="sub" style="padding:8px;color:var(--ss-w40)">No vessels in this area/window.</div>';
+      const visible = getVisibleVessels();
+      if (!visible.length) {
+        c.innerHTML = '<div class="sub" style="padding:8px;color:var(--ss-w40)">No vessels match the current search or area.</div>';
         return;
       }
-      sorted.forEach((v, i) => {
+      visible.forEach((v, i) => {
         const cls = riskClass(v.score);
         const badges = (v.reasons || []).map(r => `<span class="rule-badge">${r.label}</span>`).join('');
-        const reason = v.top_reason ? v.top_reason.label : '—';
+        const type = String(v.vessel_type || 'unknown').toLowerCase();
         const card = document.createElement('div');
         card.className = `card ${cls} fade-in`;
         card.style.animationDelay = `${Math.min(i * 30, 300)}ms`;
@@ -497,7 +1627,7 @@
           <div class="card-row2">
             <span>${flagEmoji(v.flag)} ${v.flag}</span><span class="sep">/</span>
             <span>${v.speed_knots.toFixed(1)} kn</span><span class="sep">/</span>
-            <span>${reason}</span>
+            <span>${subtypeLabel(type)}</span>
           </div>
           ${badges ? `<div class="rule-badges">${badges}</div>` : ''}
           ${v.in_protected_area ? `<div class="mpa-flag">🛡 IN MPA</div>` : ''}`;
@@ -533,62 +1663,59 @@
         end: document.getElementById('date-to').value
       };
     }
-    function buildQuery(params) {
-      const q = new URLSearchParams({ source: 'gfw' });
-      if (params) {
-        q.set('min_lat', params.min_lat.toFixed(4));
-        q.set('max_lat', params.max_lat.toFixed(4));
-        q.set('min_lon', params.min_lon.toFixed(4));
-        q.set('max_lon', params.max_lon.toFixed(4));
-        if (params.start) q.set('start_date', params.start);
-        if (params.end) q.set('end_date', params.end);
-      }
-      return q.toString();
-    }
 
     async function loadData(params) {
       setButtonLoading(true);
       markerLayer.eachLayer(l => l.setOpacity && l.setOpacity(0.3));
       showSkeletons();
+
+      const payload = params || (function () {
+        const b = map.getBounds();
+        const d = currentDates();
+        return {
+          min_lat: b.getSouth(), max_lat: b.getNorth(),
+          min_lon: b.getWest(), max_lon: b.getEast(),
+          start: d.start, end: d.end
+        };
+      })();
+      currentParams = payload;
+
       try {
         const health = await fetch(`${API_URL}/`).then(r => r.ok ? r.json() : null).catch(() => null);
-        if (health) setStatus(health.default_data_source);
+        if (health && health.default_data_source) {
+          currentSource = health.default_data_source;
+          setStatus(currentSource);
+        }
 
-        const qs = buildQuery(params);
-        const [vRes, tRes] = await Promise.all([
-          fetch(`${API_URL}/api/vessels?${qs}`),
-          fetch(`${API_URL}/api/targets?${qs}`)
-        ]);
+        const qs = buildQuery(currentParams);
+        const vRes = await fetch(`${API_URL}/api/vessels?${qs}`);
         if (!vRes.ok) {
           const body = await vRes.json().catch(() => ({}));
           throw new Error(body.detail || `HTTP ${vRes.status}`);
         }
         const vData = await vRes.json();
-        const tData = tRes.ok ? await tRes.json() : { targets: [] };
-        if (!health) setStatus(vData.source);
+        if (!health && vData.source) {
+          currentSource = vData.source;
+          setStatus(currentSource);
+        }
 
         markerLayer.clearLayers();
         ringLayer.clearLayers();
         Object.keys(markersByMmsi).forEach(k => delete markersByMmsi[k]);
-        vData.vessels.forEach(v => {
-          const m = vesselMarker(v); m.addTo(markerLayer);   // setzt auch In-MPA-Ring
-          markersByMmsi[v.mmsi] = { marker: m, latlng: [v.lat, v.lon] };
-        });
+        syncMarkers(vData.vessels);
 
-        renderCards(tData.targets && tData.targets.length ? tData.targets : vData.vessels);
+        vesselsCache = vData.vessels;
+        renderCards();
 
-        // Zaehler: Schiffe gesamt + wie viele IN Schutzgebieten
-        const inMpa = vData.vessels.filter(v => v.in_protected_area).length;
+        const inMpa = vesselsCache.filter(v => v.in_protected_area).length;
         document.getElementById('vessel-count').textContent = vData.count;
         document.getElementById('mpa-count').innerHTML =
           inMpa ? ` · <b>${inMpa} IN MPAs</b>` : '';
         document.getElementById('sidebar-sub').textContent =
-          `Ranked by risk score · ${vData.count} vessels`;
+          `Showing ${getVisibleVessels().length} of ${vesselsCache.length} vessels`;
 
-        // Schutzgebiets-Layer fuer dieselbe Region laden (parallel, nicht blockierend)
-        loadMPAs(params);
+        loadMPAs(currentParams);
 
-        // URL-Hash fuer teilbare Links
         if (params) {
           const h = `#bbox=${params.min_lon.toFixed(3)},${params.min_lat.toFixed(3)},` +
             `${params.max_lon.toFixed(3)},${params.max_lat.toFixed(3)}` +
@@ -596,6 +1723,7 @@
           history.replaceState(null, '', h);
         }
         hideError(); setOverlay(false);
+        startAutoRefresh();
       } catch (err) {
         setOverlay(false);
         showError(`⚠ ${err.message.includes('large') ? err.message : 'BACKEND OFFLINE — Run: '}` +
@@ -668,6 +1796,20 @@
     }
     document.getElementById('search-btn').onclick = searchThisArea;
 
+    document.getElementById('search-input').addEventListener('input', (event) => {
+      currentFilter = event.target.value.trim();
+      renderCards();
+      document.getElementById('sidebar-sub').textContent =
+        `Showing ${getVisibleVessels().length} of ${vesselsCache.length} vessels`;
+    });
+
+    document.getElementById('sort-select').addEventListener('change', (event) => {
+      currentSort = event.target.value;
+      renderCards();
+      document.getElementById('sidebar-sub').textContent =
+        `Showing ${getVisibleVessels().length} of ${vesselsCache.length} vessels`;
+    });
+
     // Button erst nach erster manueller Karten-Interaktion zeigen
     let ready = false;
     function maybeShowButton() { if (ready) document.getElementById('search-btn').classList.add('show'); }
@@ -689,18 +1831,20 @@
       document.getElementById('map').appendChild(ov);
       showSkeletons();
 
-      // URL-Hash auslesen (teilbare Links)
+      // Task 1.3: KEIN automatischer Datenabruf / Live-Loop beim Laden.
+      // Daten werden erst nach dem Onboarding-Submit geholt (setupOnboarding).
+      // AUSNAHME: teilbarer Link mit #bbox -> Onboarding ueberspringen + laden.
       const h = new URLSearchParams(location.hash.slice(1));
       if (h.get('bbox')) {
         const [minLon, minLat, maxLon, maxLat] = h.get('bbox').split(',').map(Number);
         if (h.get('start')) document.getElementById('date-from').value = h.get('start');
         if (h.get('end')) document.getElementById('date-to').value = h.get('end');
         map.fitBounds([[minLat, minLon], [maxLat, maxLon]]);
+        hideOnboarding();   // Shared-Link umgeht die Scope-Abfrage
         loadData({ min_lat: minLat, max_lat: maxLat, min_lon: minLon, max_lon: maxLon, start: h.get('start'), end: h.get('end') })
           .then(() => { ready = true; });
-      } else {
-        loadData().then(() => { ready = true; });   // Env-Default-Region
       }
+      // sonst: warten, bis der Nutzer im Onboarding "Initialize Scope" klickt.
     })();
   </script>
 </body>
