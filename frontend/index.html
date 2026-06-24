@@ -286,6 +286,46 @@
       max-width: 190px;
     }
 
+    /* Category filter buttons */
+    .cat-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 10px;
+    }
+
+    .cat-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 11px;
+      letter-spacing: 1px;
+      padding: 3px 8px;
+      border: 1px solid var(--ss-teal);
+      background: transparent;
+      color: var(--ss-w40);
+      cursor: pointer;
+      border-radius: 2px;
+      line-height: 1.4;
+      transition: border-color var(--t), color var(--t), background var(--t);
+    }
+
+    .cat-btn svg {
+      flex: none;
+    }
+
+    .cat-btn:hover {
+      border-color: var(--ss-w40);
+      color: var(--ss-w70);
+    }
+
+    .cat-btn.active {
+      border-color: var(--ss-orange);
+      color: var(--ss-orange);
+      background: var(--ss-orange-15);
+    }
+
     #cards {
       overflow-y: auto;
       padding: 12px;
@@ -1073,6 +1113,21 @@
             <option value="mpa_first">In MPA first</option>
           </select>
         </div>
+        <div class="cat-filters" id="cat-filters">
+          <button class="cat-btn active" data-cat="all">ALL</button>
+          <button class="cat-btn" data-cat="commercial">
+            <svg width="14" height="8" viewBox="0 0 14 8" aria-hidden="true"><rect x=".5" y=".5" width="13" height="7" rx="1" fill="currentColor"/></svg>COMMERCIAL
+          </button>
+          <button class="cat-btn" data-cat="fishing">
+            <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><polygon points="5,0.5 9.5,5 5,9.5 0.5,5" fill="currentColor"/></svg>FISHING
+          </button>
+          <button class="cat-btn" data-cat="enforcement">
+            <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><polygon points="5,0.5 9.5,9.5 0.5,9.5" fill="currentColor"/></svg>ENFORCEMENT
+          </button>
+          <button class="cat-btn" data-cat="support">
+            <svg width="14" height="8" viewBox="0 0 14 8" aria-hidden="true"><rect x=".5" y=".5" width="13" height="7" rx="3.5" fill="currentColor"/></svg>SUPPORT
+          </button>
+        </div>
       </div>
       <div id="cards"></div>
     </aside>
@@ -1090,7 +1145,7 @@
     // ==================================================================
     // KONFIGURATION
     // ==================================================================
-    const API_URL = "http://localhost:8000";
+    const API_URL = "http://127.0.0.1:8000";
 
     // ==================================================================
     // HELFER
@@ -1257,6 +1312,7 @@
     let vesselsCache = [];
     let currentFilter = '';
     let currentSort = 'score_desc';
+    let currentCatFilter = 'all';
 
     function matchesSearch(v, term) {
       if (!term) return true;
@@ -1268,6 +1324,11 @@
         v.top_reason?.label,
         (v.reasons || []).map(r => r.label).join(' ')
       ].some(value => value && value.toLowerCase().includes(q));
+    }
+
+    function matchesCategory(v) {
+      if (currentCatFilter === 'all') return true;
+      return vesselCategoryId(String(v.vessel_type || 'unknown').toLowerCase()) === currentCatFilter;
     }
 
     function sortVessels(a, b) {
@@ -1293,7 +1354,7 @@
 
     function getVisibleVessels() {
       return vesselsCache
-        .filter(v => matchesSearch(v, currentFilter))
+        .filter(v => matchesSearch(v, currentFilter) && matchesCategory(v))
         .slice()
         .sort(sortVessels);
     }
@@ -1808,6 +1869,21 @@
       renderCards();
       document.getElementById('sidebar-sub').textContent =
         `Showing ${getVisibleVessels().length} of ${vesselsCache.length} vessels`;
+    });
+
+    document.getElementById('cat-filters').addEventListener('click', (event) => {
+      const btn = event.target.closest('.cat-btn');
+      if (!btn) return;
+      const cat = btn.dataset.cat;
+      // Clicking the already-active category (or ALL) resets to all
+      currentCatFilter = (cat === currentCatFilter && cat !== 'all') ? 'all' : cat;
+      document.querySelectorAll('.cat-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.cat === currentCatFilter ||
+          (currentCatFilter === 'all' && b.dataset.cat === 'all')));
+      renderCards();
+      const visible = getVisibleVessels();
+      document.getElementById('sidebar-sub').textContent =
+        `Showing ${visible.length} of ${vesselsCache.length} vessels`;
     });
 
     // Button erst nach erster manueller Karten-Interaktion zeigen

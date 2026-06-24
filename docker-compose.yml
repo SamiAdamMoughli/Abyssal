@@ -1,0 +1,191 @@
+version: "3.9"
+
+# ===========================================================================
+# Mission Radar (Spyhop) — Production-Ready Docker Compose
+# Services: api · worker · beat · db (PostGIS) · redis · flower
+# ===========================================================================
+
+x-common-env: &common-env
+  DATABASE_URL: "postgresql+asyncpg://spyhop:spyhop@db:5432/spyhop"
+  SYNC_DATABASE_URL: "postgresql+psycopg2://spyhop:spyhop@db:5432/spyhop"
+  REDIS_URL: "redis://redis:6379/0"
+  CELERY_BROKER_URL: "redis://redis:6379/1"
+  CELERY_RESULT_BACKEND: "redis://redis:6379/2"
+  LOG_LEVEL: "INFO"
+  PYTHONPATH: "/app/src:/app"
+
+x-app-base: &app-base
+  build:
+    context: .
+    dockerfile: Dockerfile
+  environment:
+    <<: *common-env
+  env_file:
+    - .env
+  restart: unless-stopped
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL + PostGIS  (primary datastore, spatial queries)
+  # ---------------------------------------------------------------------------
+  db:
+    image: kartoza/postgis:16-3.4
+    container_name: spyhop_db
+    environment:
+      POSTGRES_USER: spyhop
+      POSTGRES_PASSWORD: spyhop
+      POSTGRES_DB: spyhop
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./src/spyhop/db/migrations/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spyhop -d spyhop"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: "2G"
+        reservations:
+          memory: "512M"
+    networks:
+      - spyhop_net
+
+  # ---------------------------------------------------------------------------
+  # Redis  (cache, PubSub, Celery broker/result backend)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: spyhop_redis
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly no
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "512M"
+        reservations:
+          memory: "64M"
+    networks:
+      - spyhop_net
+
+  # ---------------------------------------------------------------------------
+  # FastAPI  (async API server via uvicorn)
+  # ---------------------------------------------------------------------------
+  api:
+    <<: *app-base
+    container_name: spyhop_api
+    command: >
+      uvicorn spyhop.api.main:app
+      --host 0.0.0.0
+      --port 8000
+      --workers 4
+      --loop uvloop
+      --http httptools
+      --log-level info
+    ports:
+      - "8000:8000"
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: "1G"
+        reservations:
+          memory: "256M"
+    networks:
+      - spyhop_net
+
+  # ---------------------------------------------------------------------------
+  # Celery Worker  (async task execution)
+  # ---------------------------------------------------------------------------
+  worker:
+    <<: *app-base
+    container_name: spyhop_worker
+    command: >
+      celery -A spyhop.worker.celery_app worker
+      --loglevel=info
+      --concurrency=4
+      --queues=default,scoring,sync
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: "1G"
+        reservations:
+          memory: "256M"
+    networks:
+      - spyhop_net
+
+  # ---------------------------------------------------------------------------
+  # Celery Beat  (cron scheduler)
+  # ---------------------------------------------------------------------------
+  beat:
+    <<: *app-base
+    container_name: spyhop_beat
+    command: >
+      celery -A spyhop.worker.celery_app beat
+      --loglevel=info
+      --scheduler celery.beat.PersistentScheduler
+      --schedule /tmp/celerybeat-schedule
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: "256M"
+    networks:
+      - spyhop_net
+
+  # ---------------------------------------------------------------------------
+  # Flower  (Celery monitoring UI at :5555)
+  # ---------------------------------------------------------------------------
+  flower:
+    <<: *app-base
+    container_name: spyhop_flower
+    command: >
+      celery -A spyhop.worker.celery_app flower
+      --port=5555
+      --url_prefix=flower
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: "256M"
+    networks:
+      - spyhop_net
+
+volumes:
+  pgdata:
+  redisdata:
+
+networks:
+  spyhop_net:
+    driver: bridge
