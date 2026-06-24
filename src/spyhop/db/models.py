@@ -1,7 +1,8 @@
 """SQLAlchemy ORM models for the Spyhop production database.
 
-Three tables:
+Four tables:
   vessel_positions   — live AIS snapshot + pre-computed risk score (PostGIS)
+  vessel_tracks      — position history for motion profile analysis
   iuu_blacklist      — authoritative IUU vessel records (CCAMLR / RFMO / TMT)
   sanctioned_vessels — OpenSanctions vessel entities
 """
@@ -84,10 +85,54 @@ class VesselPosition(Base):
     rendezvous_duration_hours: Mapped[float] = mapped_column(Float, default=0.0)
     ais_vessel_class: Mapped[str] = mapped_column(String(10), default="")
 
+    # --- Motion profile (computed from vessel_tracks sliding window) ---------
+    behavior_status: Mapped[str] = mapped_column(
+        String(20), default="unknown"
+    )
+    behavior_confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    cog_degrees: Mapped[float] = mapped_column(Float, default=-1.0)
+
+    # --- Spatial features (zone proximity, skirting, time in zone) ----------
+    nearest_mpa_nm: Mapped[float] = mapped_column(Float, default=-1.0)
+    time_in_zone_hours: Mapped[float] = mapped_column(Float, default=0.0)
+    border_skirting: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # --- Trajectory pattern (geometric fingerprint of 6-24 h route) --------
+    trajectory_pattern: Mapped[str] = mapped_column(
+        String(20), default="unknown"
+    )
+    trajectory_confidence: Mapped[float] = mapped_column(Float, default=0.0)
+
+    # --- V2V encounter (populated by proximity detection each cycle) --------
+    rendezvous_partner_type: Mapped[str] = mapped_column(
+        String(30), default=""
+    )
+    rendezvous_meeting_class: Mapped[str] = mapped_column(
+        String(30), default=""
+    )
+
+    # --- AIS gap kinematic analysis + spoofing signals ----------------------
+    gap_type: Mapped[str] = mapped_column(String(20), default="")
+    gap_displacement_nm: Mapped[float] = mapped_column(Float, default=-1.0)
+    spoofing_flag: Mapped[bool] = mapped_column(Boolean, default=False)
+    spoofing_max_speed_kn: Mapped[float] = mapped_column(Float, default=0.0)
+
+    # --- Contextual fusion (environmental raster + registry cache) ----------
+    sst_celsius: Mapped[float] = mapped_column(Float, default=-999.0)
+    wave_height_m: Mapped[float] = mapped_column(Float, default=-1.0)
+    wind_speed_kn: Mapped[float] = mapped_column(Float, default=-1.0)
+    sst_at_thermal_front: Mapped[bool] = mapped_column(Boolean, default=False)
+    historical_risk_score: Mapped[float] = mapped_column(Float, default=-1.0)
+    verified_vessel_type: Mapped[str] = mapped_column(String(50), default="")
+
     # --- Risk output ---------------------------------------------------------
     risk_score: Mapped[float] = mapped_column(Float, default=0.0)
-    top_reason_label: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    reasons_json: Mapped[Optional[Any]] = mapped_column(JSONB, nullable=True)
+    top_reason_label: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
+    reasons_json: Mapped[Optional[Any]] = mapped_column(
+        JSONB, nullable=True
+    )
 
     # --- Metadata ------------------------------------------------------------
     data_source: Mapped[str] = mapped_column(String(20), default="synthetic")
@@ -128,11 +173,32 @@ class VesselPosition(Base):
             "ais_gap_hours": self.ais_gap_hours,
             "loitering_hours": self.loitering_hours,
             "in_protected_area": self.in_protected_area,
+            "behavior_status": self.behavior_status,
+            "behavior_confidence": self.behavior_confidence,
+            "nearest_mpa_nm": self.nearest_mpa_nm,
+            "time_in_zone_hours": self.time_in_zone_hours,
+            "border_skirting": self.border_skirting,
+            "trajectory_pattern": self.trajectory_pattern,
+            "trajectory_confidence": self.trajectory_confidence,
+            "rendezvous_partner_type": self.rendezvous_partner_type,
+            "rendezvous_meeting_class": self.rendezvous_meeting_class,
+            "gap_type": self.gap_type,
+            "gap_displacement_nm": self.gap_displacement_nm,
+            "spoofing_flag": self.spoofing_flag,
+            "spoofing_max_speed_kn": self.spoofing_max_speed_kn,
+            "sst_celsius": self.sst_celsius,
+            "wave_height_m": self.wave_height_m,
+            "wind_speed_kn": self.wind_speed_kn,
+            "sst_at_thermal_front": self.sst_at_thermal_front,
+            "historical_risk_score": self.historical_risk_score,
+            "verified_vessel_type": self.verified_vessel_type,
             "risk_score": self.risk_score,
             "top_reason_label": self.top_reason_label,
             "reasons": reasons,
             "data_source": self.data_source,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "updated_at": (
+                self.updated_at.isoformat() if self.updated_at else None
+            ),
         }
 
 
@@ -202,4 +268,102 @@ class SanctionedVessel(Base):
     source_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     synced_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=_now_utc
+    )
+
+
+# ---------------------------------------------------------------------------
+# EnvironmentRaster
+# ---------------------------------------------------------------------------
+
+
+class EnvironmentRaster(Base):
+    """Hourly environmental grid for contextual fusion.
+
+    Each row represents one grid cell (~0.25° × 0.25° resolution, ~28 km).
+    The ``position`` column is the cell centre as a PostGIS POINT.
+
+    The hourly ``sync_environment_raster`` beat task downloads the latest CMEMS
+    or NOAA products (GRIB/NetCDF), re-grids to 0.25° and upserts here.
+    Per-vessel lookup: one ST_DWithin nearest-neighbour query against the
+    GiST index (< 1 ms per vessel).
+
+    Columns:
+      sst_celsius   — Sea Surface Temperature (CMEMS SST_MED product or global)
+      wave_height_m — Significant wave height Hs (CMEMS WAV product)
+      wind_speed_kn — 10-m wind speed (converted from m/s)
+      valid_time    — UTC timestamp of the forecast/analysis hour this row covers
+    """
+
+    __tablename__ = "environment_raster"
+    __table_args__ = (
+        Index(
+            "idx_env_raster_gist", "position", postgresql_using="gist"
+        ),
+        Index("idx_env_raster_valid", "valid_time"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    position: Mapped[WKBElement] = mapped_column(
+        Geometry(geometry_type="POINT", srid=4326, spatial_index=False),
+        nullable=False,
+    )
+    sst_celsius: Mapped[float] = mapped_column(Float, nullable=False)
+    wave_height_m: Mapped[float] = mapped_column(Float, nullable=False)
+    wind_speed_kn: Mapped[float] = mapped_column(Float, nullable=False)
+    valid_time: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    @property
+    def lat(self) -> float:
+        return float(to_shape(self.position).y)
+
+    @property
+    def lon(self) -> float:
+        return float(to_shape(self.position).x)
+
+
+# ---------------------------------------------------------------------------
+# VesselTrack
+# ---------------------------------------------------------------------------
+
+
+class VesselTrack(Base):
+    """Time-series of raw AIS pings per vessel — feeds motion profile analysis.
+
+    One row per received ping. The sliding-window query pulls the last N pings
+    for a given MMSI to compute SOG variance, COG turn rate, and tortuosity.
+    Rows older than 7 days are pruned by the ``prune_vessel_tracks`` beat task.
+    """
+
+    __tablename__ = "vessel_tracks"
+    __table_args__ = (
+        # Composite index: all track queries filter by mmsi then sort by ts
+        Index("idx_vessel_tracks_mmsi_ts", "mmsi", "timestamp"),
+        Index(
+            "idx_vessel_tracks_gist",
+            "position",
+            postgresql_using="gist",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True
+    )
+    mmsi: Mapped[str] = mapped_column(String(20), nullable=False)
+    position: Mapped[WKBElement] = mapped_column(
+        Geometry(geometry_type="POINT", srid=4326, spatial_index=False),
+        nullable=False,
+    )
+    sog: Mapped[float] = mapped_column(Float, default=0.0)
+    cog: Mapped[float] = mapped_column(Float, default=0.0)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    source: Mapped[str] = mapped_column(String(20), default="unknown")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
     )

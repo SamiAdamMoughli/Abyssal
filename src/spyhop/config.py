@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     GFW_BBOX: str = "-91.5,-1.0,-90.0,0.3"
     GFW_HTTP_TIMEOUT: int = 60
 
+    # --- aisstream.io (live AIS WebSocket) -----------------------------------
+    AISSTREAM_API_KEY: str = ""
+    AISSTREAM_BBOX: str = ""          # overrides GFW_BBOX when set
+    AISSTREAM_FLUSH_INTERVAL: int = 10  # seconds between PostGIS flushes
+
     # --- Protected-area source -----------------------------------------------
     PROTECTED_AREA_SOURCE: str = "gfw"
 

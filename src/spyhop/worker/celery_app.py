@@ -1,9 +1,10 @@
 """Celery application factory + beat schedule.
 
 Beat tasks:
-  fetch_and_score_vessels  — every 5 minutes (real-time vessel tracking)
-  sync_iuu_list            — daily at 02:00 UTC (CCAMLR/RFMO/TMT list refresh)
-  sync_sanctions           — daily at 03:00 UTC (OpenSanctions bulk refresh)
+  fetch_and_score_vessels    — every 5 minutes (real-time vessel tracking)
+  sync_iuu_list              — daily at 02:00 UTC (CCAMLR/RFMO/TMT list refresh)
+  sync_sanctions             — daily at 03:00 UTC (OpenSanctions bulk refresh)
+  sync_environment_raster    — hourly at :05 UTC (SST / wave / wind grid refresh)
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ celery_app.conf.update(
         "spyhop.worker.tasks.fetch_and_score_vessels": {"queue": "scoring"},
         "spyhop.worker.tasks.sync_iuu_list": {"queue": "sync"},
         "spyhop.worker.tasks.sync_sanctions": {"queue": "sync"},
+        "spyhop.worker.tasks.sync_environment_raster": {"queue": "sync"},
     },
 
     # --- Resilience ----------------------------------------------------------
@@ -65,6 +67,11 @@ celery_app.conf.update(
         "sync-sanctions-daily": {
             "task": "spyhop.worker.tasks.sync_sanctions",
             "schedule": crontab(hour=3, minute=0),
+            "options": {"queue": "sync"},
+        },
+        "sync-environment-raster-hourly": {
+            "task": "spyhop.worker.tasks.sync_environment_raster",
+            "schedule": crontab(minute=5),   # :05 past every hour
             "options": {"queue": "sync"},
         },
     },
