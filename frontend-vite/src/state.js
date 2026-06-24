@@ -13,6 +13,5 @@ export const state = {
   currentFilter: '',
   currentSort: 'score_desc',
   currentCatFilter: 'all',
-  refreshTimer: null,
-  isRefreshing: false,
+  eventSource: null,
 };

@@ -1,4 +1,4 @@
-import { API_URL, REFRESH_INTERVAL_MS } from './config.js';
+import { API_URL } from './config.js';
 import { state } from './state.js';
 import { syncMarkers } from './markers.js';
 import { loadMPAs } from './mpa.js';
@@ -17,33 +17,46 @@ export function buildQuery(params) {
   return q.toString();
 }
 
-export function startAutoRefresh() {
-  if (state.refreshTimer) clearInterval(state.refreshTimer);
-  state.refreshTimer = setInterval(() => {
-    if (state.currentParams) refreshVessels();
-  }, REFRESH_INTERVAL_MS);
-}
-
-export async function refreshVessels() {
-  if (state.isRefreshing) return;
-  state.isRefreshing = true;
-  try {
-    const qs = buildQuery(state.currentParams);
-    const res = await fetch(`${API_URL}/api/vessels?${qs}`);
-    if (!res.ok) return;
-    const vData = await res.json();
-    if (!vData || !Array.isArray(vData.vessels)) return;
-    state.vesselsCache = vData.vessels;
-    syncMarkers(vData.vessels);
-    renderCards();
-    updateVesselCounts();
-  } catch (err) {
-    console.warn('Auto-refresh failed:', err.message || err);
-  } finally {
-    state.isRefreshing = false;
+// ==================================================================
+// SSE STREAM  (replaces setInterval polling)
+// ==================================================================
+export function closeStream() {
+  if (state.eventSource) {
+    state.eventSource.close();
+    state.eventSource = null;
   }
 }
 
+export function openStream(params) {
+  closeStream();
+  const qs = buildQuery(params);
+  const es = new EventSource(`${API_URL}/api/vessels/stream?${qs}`);
+  state.eventSource = es;
+
+  es.onmessage = (e) => {
+    try {
+      const vData = JSON.parse(e.data);
+      if (!Array.isArray(vData?.vessels)) return;
+      state.vesselsCache = vData.vessels;
+      syncMarkers(vData.vessels);
+      renderCards();
+      updateVesselCounts();
+    } catch (err) {
+      console.warn('SSE parse error:', err);
+    }
+  };
+
+  es.addEventListener('error', () => {
+    // EventSource auto-reconnects on network errors — no manual retry needed.
+    if (es.readyState === EventSource.CLOSED) {
+      console.warn('SSE stream closed by server');
+    }
+  });
+}
+
+// ==================================================================
+// DATE HELPER
+// ==================================================================
 export function currentDates() {
   return {
     start: document.getElementById('date-from').value,
@@ -51,10 +64,13 @@ export function currentDates() {
   };
 }
 
+// ==================================================================
+// INITIAL FULL LOAD  (one-shot fetch, then hands off to SSE stream)
+// ==================================================================
 export async function loadData(params) {
   setButtonLoading(true);
   state.markerLayer.eachLayer(l => l.setOpacity && l.setOpacity(0.3));
-  showSkeletons();
+  const skeletonTimer = setTimeout(showSkeletons, 200);
 
   const payload = params || (() => {
     const b = state.map.getBounds();
@@ -104,12 +120,13 @@ export async function loadData(params) {
     }
     hideError();
     setOverlay(false);
-    startAutoRefresh();
+    openStream(state.currentParams);
   } catch (err) {
     setOverlay(false);
     showError(`⚠ ${err.message.includes('large') ? err.message : 'BACKEND OFFLINE — Run: '}` +
       (err.message.includes('large') ? '' : `<code>uvicorn app.main:app --reload</code>`));
   } finally {
+    clearTimeout(skeletonTimer);
     setButtonLoading(false);
   }
 }
