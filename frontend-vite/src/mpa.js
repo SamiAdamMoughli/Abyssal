@@ -3,6 +3,32 @@ import { API_URL } from './config.js';
 import { state } from './state.js';
 import { css } from './utils.js';
 
+const MPA_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
+function cacheKey(params) {
+  // Round to 1 decimal place so minor panning reuses the same slot.
+  const r = (n) => Math.round(n * 10) / 10;
+  return `mpa:${r(params.min_lat)},${r(params.max_lat)},${r(params.min_lon)},${r(params.max_lon)}`;
+}
+
+function readCache(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const { ts, data } = JSON.parse(raw);
+    if (Date.now() - ts > MPA_TTL_MS) { localStorage.removeItem(key); return null; }
+    return data;
+  } catch { return null; }
+}
+
+function writeCache(key, data) {
+  try {
+    localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data }));
+  } catch {
+    // localStorage full — silently skip, the layer still renders from network data.
+  }
+}
+
 function mpaLoading(on) {
   document.getElementById('mpa-loading').classList.toggle('show', on);
 }
@@ -10,10 +36,15 @@ function mpaLoading(on) {
 export async function loadMPAs(params) {
   mpaLoading(true);
   try {
-    const qs = buildQuery(params);
-    const res = await fetch(`${API_URL}/api/protected-areas?${qs}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    const key = cacheKey(params);
+    let data = readCache(key);
+    if (!data) {
+      const qs = buildQuery(params);
+      const res = await fetch(`${API_URL}/api/protected-areas?${qs}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      data = await res.json();
+      writeCache(key, data);
+    }
     state.mpaLayer.clearLayers();
     L.geoJSON(data, {
       style: {
