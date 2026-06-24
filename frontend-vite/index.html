@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>SPYHOP · Mission Radar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <!-- ONBOARDING SCREEN -->
+  <div id="onboarding-screen">
+    <div class="onboarding-box">
+      <div class="onboarding-title">SPECIFY YOUR OPERATION SCOPE</div>
+      <div class="onboarding-subtitle">Define target area and search parameters</div>
+      <form id="onboarding-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="onboarding-lat">Latitude</label>
+            <input type="number" id="onboarding-lat" placeholder="e.g., -0.5" step="0.0001" />
+          </div>
+          <div class="form-group">
+            <label for="onboarding-lon">Longitude</label>
+            <input type="number" id="onboarding-lon" placeholder="e.g., -90.5" step="0.0001" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="onboarding-radius">Search Radius (nautical miles)</label>
+          <input type="number" id="onboarding-radius" placeholder="e.g., 50" min="1" max="500" step="1" value="50" />
+        </div>
+        <div class="onboarding-buttons">
+          <button type="button" id="btn-use-location">📍 USE CURRENT LOCATION</button>
+          <button type="submit" id="btn-initialize">INITIALIZE SCOPE</button>
+        </div>
+        <div class="onboarding-info">
+          <strong>Tip:</strong> Enter your target coordinates or use the geolocation button to auto-detect your current
+          position. The search radius defines how far from your location to scan for vessels.
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="app">
+    <header id="topbar">
+      <div class="logo"><span class="skull">☠</span>SPYHOP</div>
+      <div class="subtitle">MISSION RADAR</div>
+      <div class="topbar-spacer"></div>
+      <div id="status-pill" class="pill syn"><span class="dot"></span><span id="status-text">CONNECTING</span></div>
+      <div class="toggle-group">
+        <button class="toggle-btn" data-mode="vessels">🚢 VESSELS</button>
+        <button class="toggle-btn" data-mode="mpas">🛡 MPAs</button>
+        <button class="toggle-btn active" data-mode="both">⊕ BOTH</button>
+      </div>
+      <div class="count"><b id="vessel-count">—</b> vessels<span id="mpa-count"></span></div>
+    </header>
+
+    <aside id="sidebar">
+      <div class="sidebar-head">
+        <h2>VESSEL LIST</h2>
+        <div class="sub" id="sidebar-sub">Search and sort all vessels</div>
+        <div class="daterow">
+          <div class="datefield"><label>FROM</label><input type="date" id="date-from" /></div>
+          <div class="datefield"><label>TO</label><input type="date" id="date-to" /></div>
+        </div>
+        <div class="sidebar-controls">
+          <input id="search-input" type="search" placeholder="Search name, MMSI, flag…" />
+          <select id="sort-select" aria-label="Sort vessels">
+            <option value="score_desc">Score ↓</option>
+            <option value="score_asc">Score ↑</option>
+            <option value="name_asc">Name A→Z</option>
+            <option value="name_desc">Name Z→A</option>
+            <option value="flag_asc">Flag A→Z</option>
+            <option value="mpa_first">In MPA first</option>
+          </select>
+        </div>
+        <div class="cat-filters" id="cat-filters">
+          <button class="cat-btn active" data-cat="all">ALL</button>
+          <button class="cat-btn" data-cat="commercial">
+            <svg width="14" height="8" viewBox="0 0 14 8" aria-hidden="true"><rect x=".5" y=".5" width="13" height="7" rx="1" fill="currentColor"/></svg>COMMERCIAL
+          </button>
+          <button class="cat-btn" data-cat="fishing">
+            <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><polygon points="5,0.5 9.5,5 5,9.5 0.5,5" fill="currentColor"/></svg>FISHING
+          </button>
+          <button class="cat-btn" data-cat="enforcement">
+            <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><polygon points="5,0.5 9.5,9.5 0.5,9.5" fill="currentColor"/></svg>ENFORCEMENT
+          </button>
+          <button class="cat-btn" data-cat="support">
+            <svg width="14" height="8" viewBox="0 0 14 8" aria-hidden="true"><rect x=".5" y=".5" width="13" height="7" rx="3.5" fill="currentColor"/></svg>SUPPORT
+          </button>
+        </div>
+      </div>
+      <div id="cards"></div>
+    </aside>
+
+    <div id="map"></div>
+  </div>
+
+  <button id="search-btn">🔍 SEARCH THIS AREA</button>
+  <div id="area-warn">⚠ LARGE AREA — results may be slow or limited. Zoom in for best results.</div>
+  <div id="error-banner"></div>
+  <div id="mpa-loading">◈ Loading protected areas…</div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
