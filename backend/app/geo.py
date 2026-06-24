@@ -170,6 +170,31 @@ def local_protected_areas(
     return {"type": "FeatureCollection", "features": features}
 
 
+def get_zone_geometry() -> Optional[BaseGeometry]:
+    """Returns the merged Shapely zone geometry for spatial calculations."""
+    geom, _ = _load()
+    return geom  # type: ignore[return-value]
+
+
+def distance_to_nearest_zone_nm(lat: float, lon: float) -> float:
+    """Distance to nearest protected-zone boundary in nautical miles.
+
+    Returns 0.0 when inside a zone, -1.0 when no zone geometry is loaded.
+    """
+    import math
+    geom = get_zone_geometry()
+    if geom is None:
+        return -1.0
+    pt = Point(lon, lat)
+    if geom.covers(pt):
+        return 0.0
+    deg = geom.boundary.distance(pt)
+    nm_per_deg = 60.0 * math.sqrt(
+        (1.0 + math.cos(math.radians(lat)) ** 2) / 2
+    )
+    return deg * nm_per_deg
+
+
 def reset_cache() -> None:
     """Verwirft den Cache - vor allem fuer Tests/Quellenwechsel."""
     global _protected_geom, _protected_fc

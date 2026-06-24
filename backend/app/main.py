@@ -10,11 +10,14 @@ Start (aus dem Ordner backend/):
 
 from __future__ import annotations
 
+import asyncio
+import json
 from time import monotonic
 from typing import Any, Dict, Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from sse_starlette.sse import EventSourceResponse
 
 import os
 
@@ -210,6 +213,7 @@ def _assessment_to_dict(a: TargetAssessment) -> Dict[str, Any]:
         "loitering_hours": a.vessel.loitering_hours,
         "vessel_type": getattr(a.vessel, "vessel_type", "unknown"),
         "score": a.score,
+        "risk_score": a.score,
         "top_reason": _reason_to_dict(top) if top else None,
         "reasons": [_reason_to_dict(r) for r in a.reasons],
     }
@@ -319,3 +323,56 @@ def get_protected_areas(
         "source": source,
         "count": len(fc.get("features", [])),
     }
+
+
+_STREAM_POLL_SECONDS = float(os.environ.get("VESSEL_STREAM_POLL_SECONDS", "3"))
+
+
+@app.get("/api/vessels/stream")
+async def stream_vessels(
+    request: Request,
+    source: str = _SOURCE_QUERY,
+    min_lat: Optional[float] = None,
+    max_lat: Optional[float] = None,
+    min_lon: Optional[float] = None,
+    max_lon: Optional[float] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+):
+    """SSE-Stream fuer Live-Schiffspositionen.
+
+    Haelt eine langlebige HTTP-Verbindung offen und pushed neue Vessel-Daten
+    nur wenn sich die Datenlage gegenueber dem letzten Tick geaendert hat.
+    Der Client muss keine Polling-Logik implementieren; EventSource baut die
+    Verbindung bei Verbindungsabbruch automatisch neu auf.
+    """
+    bbox, start, end = parse_region(min_lat, max_lat, min_lon, max_lon,
+                                    start_date, end_date)
+    src = (source or DEFAULT_DATA_SOURCE).lower()
+
+    async def generate():
+        last_fp: tuple = ()
+        while True:
+            if await request.is_disconnected():
+                break
+            try:
+                vessels = _load_vessels(src, bbox, start, end)
+                assessments = risk_engine.assess_all(vessels)
+                fp = tuple((a.vessel.mmsi, round(a.score, 1)) for a in assessments)
+                if fp != last_fp:
+                    last_fp = fp
+                    payload = {
+                        "source": src,
+                        "count": len(assessments),
+                        "vessels": [_assessment_to_dict(a) for a in assessments],
+                    }
+                    yield {"data": json.dumps(payload)}
+            except HTTPException as exc:
+                yield {"event": "error", "data": exc.detail}
+                break
+            except Exception as exc:
+                yield {"event": "error", "data": str(exc)}
+                break
+            await asyncio.sleep(_STREAM_POLL_SECONDS)
+
+    return EventSourceResponse(generate())

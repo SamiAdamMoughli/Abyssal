@@ -18,6 +18,14 @@ venv/
 
 # Secrets / local env (never commit real tokens)
 .env
+.env.local
+.env.*.local
+frontend-vite/.env.local
+frontend-vite/.env.production
+
+# Vite build output
+frontend-vite/dist/
+frontend-vite/node_modules/
 
 # Generierter Quellen-Cache (regenerierbar via refresh_sources)
 backend/data/cache/*

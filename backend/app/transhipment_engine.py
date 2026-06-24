@@ -185,6 +185,45 @@ def signal_dark_fleet_proximity(v: Vessel) -> Optional[RiskReason]:
 
 
 # --------------------------------------------------------------------------- #
+# Signal 6: Dark Partner Inferred
+# --------------------------------------------------------------------------- #
+# Ein Kuehlschiff das auf offener See treibt ohne erkennbare AIS-Partner
+# impliziert eine Begegnung mit einem "dunklen" Schiff (AIS ausgeschaltet).
+# Kombination: Reefer-Typ + Loitering-Profil + kein Hafen + kein AIS-Partner.
+#
+# Quelle: GFW "Dark Vessels" 2021 - "vessels that appear to loiter at sea
+#   for extended periods with no nearby AIS signals" als Kategorie definiert.
+# Evidence: "behavioral" - inferiert, kein direktes AIS-Gegenpart nachweisbar.
+
+def signal_dark_partner_inferred(v: Vessel) -> Optional[RiskReason]:
+    """Kuehlschiff stationaer im Ozean ohne erkennbare AIS-Nachbarn."""
+    if _vtype(v) not in _REEFER_TYPES:
+        return None
+    if v.speed_knots >= 1.0:
+        return None
+    if v.nearby_fishing_vessels > 0:
+        return None  # Sichtbarer AIS-Partner -> signal_rendezvous deckt das ab
+    if v.distance_to_nearest_port_nm < 0:
+        return None  # Unbekannte Port-Distanz -> kein Signal (konservativ)
+    if v.distance_to_nearest_port_nm < 100:
+        return None  # Zu nah am Hafen - koennte normales Ankern sein
+    if v.behavior not in ("anchored", "loitering"):
+        return None  # Kein Bewegungsprofil das langes Stillliegen bestaetigt
+    return RiskReason(
+        points=22,
+        label="Dark Partner Inferred",
+        detail=(
+            f"Kuehlschiff treibt ~{v.speed_knots:.1f} kn auf offenem "
+            f"Ozean, {v.distance_to_nearest_port_nm:.0f} nm vom naechsten "
+            "Hafen, ohne erkennbare AIS-Nachbarn. Konsistent mit Rendezvous "
+            "mit AIS-abgeschaltetem Fischereifahrzeug. "
+            "(GFW 'Dark Fishing Fleets' 2021)"
+        ),
+        evidence_type="behavioral",
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Compound Multiplier Label (wird in compound_score() als Marker-Reason gesetzt)
 # --------------------------------------------------------------------------- #
 COMPOUND_MULTIPLIER = 1.4

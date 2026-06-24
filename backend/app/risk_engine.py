@@ -52,6 +52,43 @@ class Vessel:
     rendezvous_duration_hours: float = 0.0  # h mit anderem Schiff < 0.5 nm bei < 3 kn
     ais_vessel_class: str = ""              # roher AIS Ship Type Code (0-99)
 
+    # Motion profile (computed from vessel_tracks sliding window).
+    # "unknown" when fewer than 3 pings are available in the DB.
+    behavior: str = "unknown"              # transit/trawling/loitering/anchored
+    behavior_confidence: float = 0.0      # 0.0–1.0
+    cog_degrees: float = -1.0             # current course over ground
+
+    # Spatial features (computed from vessel_tracks + zone geometry).
+    # -1.0 = no zone geometry loaded / unknown.
+    nearest_mpa_nm: float = -1.0         # nautical miles to nearest MPA boundary
+    time_in_zone_hours: float = 0.0      # hours in current zone (from track history)
+    border_skirting: bool = False        # sustained near-boundary without entering
+
+    # Trajectory pattern (geometric shape of the 6-24 h route).
+    trajectory_pattern: str = "unknown"  # grid/holding/spiral/transit/anomaly
+    trajectory_confidence: float = 0.0
+
+    # Vessel-to-vessel interaction (populated by proximity detection).
+    # "" = no active encounter detected this cycle.
+    rendezvous_partner_type: str = ""  # vessel type of the proximate partner
+    rendezvous_meeting_class: str = ""  # classified encounter type
+
+    # AIS gap kinematic analysis + spoofing signals.
+    # gap_type: tactical_dark / technical_failure / spoofing / "" (unknown)
+    gap_type: str = ""
+    gap_displacement_nm: float = -1.0
+    spoofing_flag: bool = False          # kinematic violation detected
+    spoofing_max_speed_kn: float = 0.0  # highest implied speed in track
+
+    # Contextual fusion (environmental raster + registry cache).
+    # Sentinels: sst_celsius=-999 / wave_height_m=-1 / wind_speed_kn=-1 = no data.
+    sst_celsius: float = -999.0          # Sea Surface Temperature at position
+    wave_height_m: float = -1.0          # significant wave height (CMEMS)
+    wind_speed_kn: float = -1.0          # 10-m wind speed
+    sst_at_thermal_front: bool = False   # SST gradient ≥ 2°C detected nearby
+    historical_risk_score: float = -1.0  # highest score in last 30 days; -1 = new
+    verified_vessel_type: str = ""       # registry type (IHS/Equasis); "" = unknown
+
 
 @dataclass
 class RiskReason:
@@ -134,12 +171,59 @@ def rule_fishing_speed(v: Vessel) -> Optional[RiskReason]:
 
 
 def rule_ais_gap(v: Vessel) -> Optional[RiskReason]:
-    """AIS-Luecken deuten auf bewusstes Abschalten ("going dark") hin.
+    """AIS-Luecken bewertet mit kinematischer Plausibilitaet.
 
-    Gestufte Bewertung: laengere Luecken sind verdaechtiger. Es wird nur EINE
-    Begruendung erzeugt (die hoehere Stufe gewinnt), damit Luecken nicht doppelt
-    zaehlen.
+    Wenn gap_type bekannt ist (kinematische Analyse abgeschlossen), wird der
+    Score durch die Reiseart beim Wiederauftauchen verfeinert:
+      TACTICAL_DARK   — Schiff hat sich kaum bewegt: stundenlange Stille,
+                        minimale Positionsveraenderung → bewusstes Verstecken.
+      SPOOFING        — Positionssprung waehrend Gap ist physikalisch unmoeglich.
+      TECHNICAL_FAILURE — Schiff setzte Kurs plausibel fort; technischer Ausfall.
+      (leer)          — Keine Wiederauftauch-Daten: generische Stufenbewertung.
     """
+    gt = (v.gap_type or "").lower()
+
+    if gt == "spoofing":
+        return RiskReason(
+            points=45,
+            label="Positions-Sprung (Spoofing)",
+            detail=(
+                f"Positions-Sprung waehrend {v.ais_gap_hours:.0f}h AIS-Luecke: "
+                f"erforderliche Geschwindigkeit > 50 kn ({v.gap_displacement_nm:.0f} nm). "
+                "Physikalisch unmoeglich fuer Oberflaechenschiff. "
+                "Koordinaten-Spoofing hochwahrscheinlich."
+            ),
+            evidence_type="hard",
+        )
+
+    if gt == "tactical_dark":
+        return RiskReason(
+            points=40,
+            label="Taktisches Abschalten",
+            detail=(
+                f"{v.ais_gap_hours:.0f}h AIS-Stille, danach nur "
+                f"{v.gap_displacement_nm:.0f} nm Positionswechsel. "
+                "Schiff haette in dieser Zeit weit reisen koennen — "
+                "blieb aber lokal. Klassisches 'Going Dark' zum Verstecken. "
+                "(Millefiori et al. 2021)"
+            ),
+        )
+
+    if gt == "technical_failure":
+        if v.ais_gap_hours >= 12:
+            return RiskReason(
+                points=15,
+                label="AIS-Ausfall >=12h (technisch)",
+                detail=(
+                    f"AIS-Signal {v.ais_gap_hours:.0f}h unterbrochen. "
+                    "Kinematische Analyse deutet auf technischen Ausfall hin "
+                    "(Positionswechsel plausibel zur deklarierten Geschwindigkeit). "
+                    "Verlaengerte technische Ausfaelle sind dennoch beobachtenswert."
+                ),
+            )
+        return None
+
+    # Fallback: gap_type unknown (no reappearance data yet)
     if v.ais_gap_hours >= 12:
         return RiskReason(
             points=25,
@@ -147,7 +231,7 @@ def rule_ais_gap(v: Vessel) -> Optional[RiskReason]:
             detail=(
                 f"AIS-Signal {v.ais_gap_hours:.0f}h unterbrochen. Lange Luecken "
                 "deuten auf bewusstes Abschalten des Transponders hin "
-                '("going dark") - ein klassisches Verschleierungsmuster.'
+                '("going dark"). Kinematische Analyse folgt bei Wiederauftauchen.'
             ),
         )
     if v.ais_gap_hours >= 4:
@@ -155,11 +239,59 @@ def rule_ais_gap(v: Vessel) -> Optional[RiskReason]:
             points=10,
             label="AIS-Luecke >=4h",
             detail=(
-                f"AIS-Signal {v.ais_gap_hours:.0f}h unterbrochen. Eine moderate "
-                "Luecke kann technisch bedingt sein, ist aber beobachtenswert."
+                f"AIS-Signal {v.ais_gap_hours:.0f}h unterbrochen. "
+                "Moderate Luecke — beobachtenswert, koennte technisch bedingt sein."
             ),
         )
     return None
+
+
+def rule_kinematic_violation(v: Vessel) -> Optional[RiskReason]:
+    """Physikalisch unmoeglich schneller Positions-Sprung zwischen AIS-Pings.
+
+    Wenn die implizierte Geschwindigkeit zwischen zwei aufeinanderfolgenden
+    Pings die physikalische Grenze (50 kn) uebersteigt, ist mindestens eine
+    der Koordinaten gefaelscht — haertestes Spoofing-Indiz aus reine AIS-Daten.
+    """
+    if not v.spoofing_flag:
+        return None
+    if v.spoofing_max_speed_kn < 50.0:
+        return None
+    return RiskReason(
+        points=40,
+        label="Kinematik-Verletzung (Spoofing)",
+        detail=(
+            f"Implizierte Geschwindigkeit zwischen zwei AIS-Pings: "
+            f"{v.spoofing_max_speed_kn:.0f} kn. "
+            "Kein Oberflaechenschiff kann mehr als ~50 kn fahren. "
+            "Koordinaten-Spoofing durch skriptgenerierte Position nachgewiesen. "
+            "(Vespe et al. 2016)"
+        ),
+        evidence_type="hard",
+    )
+
+
+def rule_static_coords(v: Vessel) -> Optional[RiskReason]:
+    """Gemeldete SOG > 2 kn, aber Koordinaten aendern sich kaum.
+
+    Echte GPS-Empfaenger auf schwankenden Schiffen haben immer natuerliches
+    Rauschen. Wenn ein Schiff Fahrt meldet, aber die Position eingefroren ist,
+    wurden die Koordinaten synthetisch generiert.
+    """
+    if not v.spoofing_flag:
+        return None
+    if v.spoofing_max_speed_kn >= 50.0:
+        return None  # kinematic violation already explains spoofing
+    return RiskReason(
+        points=20,
+        label="Statische Koordinaten (Spoofing)",
+        detail=(
+            "Schiff meldet Fahrt > 2 kn, aber GPS-Koordinaten aendern sich "
+            "kaum zwischen Pings. Echte Koordinaten haben immer natuerliches "
+            "Rauschen. Verdacht auf skriptgenerierte Fake-Position."
+        ),
+        evidence_type="heuristic",
+    )
 
 
 def rule_loitering(v: Vessel) -> Optional[RiskReason]:
@@ -275,6 +407,227 @@ def rule_port_detention(v: Vessel) -> Optional[RiskReason]:
     return None
 
 
+def rule_mpa_proximity(v: Vessel) -> Optional[RiskReason]:
+    """Vessel within 5 nm of an MPA boundary — pre-alert buffer zone.
+
+    Fires only when the vessel is outside the zone (inside is caught by
+    rule_protected_area). Distance -1 means unknown → rule stays silent.
+    Tiered: closer = more points.
+    """
+    nm = v.nearest_mpa_nm
+    if nm < 0:
+        return None
+    if nm == 0.0 or v.in_protected_area:
+        return None  # inside zone — rule_protected_area already fires
+    if nm <= 2.0:
+        return RiskReason(
+            points=12,
+            label="Pufferzone <2 nm",
+            detail=(
+                f"{nm:.1f} nm vor der MPA-Grenze. Unmittelbare Naeherung "
+                "an das Schutzgebiet — Grenzuebertritt moeglich."
+            ),
+        )
+    if nm <= 5.0:
+        return RiskReason(
+            points=6,
+            label="Pufferzone <5 nm",
+            detail=(
+                f"{nm:.1f} nm vor der MPA-Grenze. Schiff befindet sich "
+                "in der 5-sm-Pufferzone (Pre-Alert)."
+            ),
+        )
+    return None
+
+
+def rule_time_in_mpa(v: Vessel) -> Optional[RiskReason]:
+    """Sustained presence inside an MPA from track history.
+
+    rule_protected_area fires at entry; this rule adds weight after the
+    vessel has been inside long enough to signal active (not accidental) fishing.
+    Tiered by duration.
+    """
+    if not v.in_protected_area or v.time_in_zone_hours <= 0:
+        return None
+    h = v.time_in_zone_hours
+    if h >= 6.0:
+        return RiskReason(
+            points=20,
+            label=f"In MPA seit >{int(h)}h",
+            detail=(
+                f"Schiff ist seit {h:.1f} Stunden ununterbrochen im Schutzgebiet. "
+                "Anhaltende Praesenz deutet auf aktive Fischerei hin, nicht auf Durchfahrt."
+            ),
+        )
+    if h >= 2.0:
+        return RiskReason(
+            points=12,
+            label=f"In MPA seit >{int(h)}h",
+            detail=(
+                f"Schiff ist seit {h:.1f} Stunden im Schutzgebiet "
+                "(Mindest-Schwelle fuer aktive Praesenz ueberschritten)."
+            ),
+        )
+    return None
+
+
+def rule_border_skirting(v: Vessel) -> Optional[RiskReason]:
+    """Vessel repeatedly hugs the MPA boundary without crossing — spillover fishing.
+
+    Fishing vessels exploit the 'spillover effect': fish that migrate out of
+    the protected zone are harvested just outside the boundary. The vessel's
+    track stays consistently within a few nautical miles without ever entering.
+    """
+    if v.border_skirting:
+        nm = v.nearest_mpa_nm
+        dist_str = f"{nm:.1f} nm" if nm >= 0 else "nahe der Grenze"
+        return RiskReason(
+            points=18,
+            label="Grenz-Schleichen",
+            detail=(
+                f"Schiff bewegt sich seit mehreren Stunden entlang der MPA-Grenze "
+                f"(akt. Abstand: {dist_str}) ohne einzutreten. "
+                "Typisches Muster fuer Spillover-Fischerei."
+            ),
+        )
+    return None
+
+
+def rule_pair_transshipment(v: Vessel) -> Optional[RiskReason]:
+    """Fishing vessel with an active reefer/carrier as encounter partner.
+
+    `signal_rendezvous` in transhipment_engine fires on the REEFER side.
+    This rule fires on the FISHING VESSEL side — it sees the reefer as
+    its proximate partner, making the pair mutually incriminating.
+    Only fires when our own proximity engine detected the pair; it does
+    NOT fire from GFW encounter data alone (GFW populates nearby_fishing_vessels
+    on the reefer, not rendezvous_partner_type on the fisher).
+    """
+    _FISHING = {
+        "fishing", "trawler", "longliner",
+        "purse_seiner", "squid_jigger",
+    }
+    _REEFER = {"reefer", "carrier", "refrigerated", "fish_carrier"}
+
+    if (v.vessel_type or "").lower() not in _FISHING:
+        return None
+    pt = (v.rendezvous_partner_type or "").lower()
+    if not pt or pt not in _REEFER:
+        return None
+    dur = v.rendezvous_duration_hours
+    if dur < 0.5:
+        return None
+    return RiskReason(
+        points=25,
+        label="Transshipment-Rendezvous",
+        detail=(
+            f"Fischereifahrzeug seit {dur:.1f} h in Nahbereich eines "
+            f"Kuehlschiffs (Typ: {pt}). Direkter Beleg fuer potentiellen "
+            "Fanguebergabe auf See. Kombination Fischfangschiff + Reefer "
+            "ist staerkster Transhipment-Indikator aus AIS-Daten. "
+            "(Kroodsma et al. 2018, GFW)"
+        ),
+        evidence_type="hard",
+    )
+
+
+def rule_trajectory_pattern(v: Vessel) -> Optional[RiskReason]:
+    """Geometric fingerprint of the 6-24 h route shape.
+
+    Complements motion-profile (instantaneous kinematics) with long-range
+    shape evidence. ANOMALY fires when a non-fishing vessel traces a fishing
+    geometry — the most powerful signal for dark fleet behaviour.
+    """
+    tp = v.trajectory_pattern
+    tc = v.trajectory_confidence
+    if tp == "unknown" or tc < 0.5:
+        return None
+
+    FISHING_TYPES = {"trawler", "longliner", "purse_seiner", "fishing"}
+    vt = v.vessel_type or "unknown"
+
+    if tp == "anomaly":
+        return RiskReason(
+            points=20,
+            label="Trajektorie-Anomalie",
+            detail=(
+                f"Schiff vom Typ '{vt}' faehrt ein Fischerei-Zickzack-Muster "
+                f"(Konfidenz {tc:.0%}). Nicht-Fischfahrzeuge haben keinen "
+                "legitimen Grund fuer diese Trajektorie-Form."
+            ),
+        )
+    if tp == "grid":
+        if vt in FISHING_TYPES:
+            return RiskReason(
+                points=10,
+                label="Gitter-Trajektorie",
+                detail=(
+                    f"Schlepp-Fischereibewegung geometrisch bestaetigt: "
+                    f"parallele Schleifen mit ~90°-Kehren (Konfidenz {tc:.0%}). "
+                    "Erhaertet den Trawling-Verdacht."
+                ),
+            )
+        return RiskReason(
+            points=15,
+            label="Unerwartetes Gitter-Muster",
+            detail=(
+                f"Schiff vom Typ '{vt}' faehrt Fischereigeometrie (Konfidenz "
+                f"{tc:.0%}). Typ-Muster-Abweichung ist verdaechtig."
+            ),
+        )
+    if tp == "holding":
+        return RiskReason(
+            points=12,
+            label="Warte-Trajektorie",
+            detail=(
+                f"Schiff fährt geschlossene Schleifen auf offener See "
+                f"(Konfidenz {tc:.0%}). Typisch fuer heimliche Rendezvous-Warten "
+                "oder ungemeldetes Schiff-zu-Schiff-Transfer."
+            ),
+        )
+    if tp == "spiral":
+        return RiskReason(
+            points=6,
+            label="Spiral-Muster",
+            detail=(
+                f"Spiralfoermige Trajektorie (Konfidenz {tc:.0%}). "
+                "Moeglicherweise SAR, Kalibrierung — oder Netze einholend."
+            ),
+        )
+    return None
+
+
+def rule_behavior_profile(v: Vessel) -> Optional[RiskReason]:
+    """Kinematic pattern from motion profile analysis (track-history-based).
+
+    Fires only when a motion profile has been computed (>= 3 historical pings).
+    TRAWLING adds points as kinematic confirmation on top of the speed signal.
+    LOITERING from raw pings is orthogonal to GFW's pre-computed loitering_hours
+    and adds independent evidence of suspicious lingering.
+    """
+    if v.behavior == "trawling" and v.behavior_confidence >= 0.5:
+        return RiskReason(
+            points=12,
+            label="Trawling-Muster",
+            detail=(
+                f"Bewegungsprofil bestaetigt Schlepp-Fischereibewegung: "
+                f"Tortuositaet hoch, Tempo 2–5 kn, rhythmische Kurswechsel "
+                f"(Konfidenz {v.behavior_confidence:.0%})."
+            ),
+        )
+    if v.behavior == "loitering" and v.behavior_confidence >= 0.5:
+        return RiskReason(
+            points=8,
+            label="Loitering-Muster",
+            detail=(
+                f"Bewegungsprofil: Schiff kreist auf engem Raum ohne klares "
+                f"Fahrziel (SOG < 3 kn, hohe Tortuositaet, chaotische Kurse). "
+                f"Konfidenz {v.behavior_confidence:.0%}."
+            ),
+        )
+    return None
+
+
 def rule_eez_violation(v: Vessel) -> Optional[RiskReason]:
     """Schiff in fremder EEZ (Flagge != Kuestenstaat) - ohne Lizenz-Kontext."""
     from .sources import eez
@@ -288,6 +641,171 @@ def rule_eez_violation(v: Vessel) -> Optional[RiskReason]:
     return None
 
 
+def rule_thermal_front_loitering(v: Vessel) -> Optional[RiskReason]:
+    """Fischerei-Verdacht erhoehen, wenn Schiff an einer Temperaturfront lauert.
+
+    Thunfisch (Gelbflossenthun, Weissem Thun) aggregiert bevorzugt an SST-Fronten
+    — Grenzen zwischen warmem und kaltem Wasser (15-28°C-Bereich). Ein Fischerboot,
+    das dort langsam faehrt oder lauert, ist sehr wahrscheinlich aktiv beim Fischen.
+    Schiffe, die nicht offiziell als Fischer gemeldet sind, aber dieses Muster zeigen,
+    erhalten ebenfalls erhoehte Punkte (undeklarierer Fischereiverdacht).
+
+    Quellen: Zainuddin et al. (2017); Lehodey et al. (2008) SEAPODYM-Modell.
+    """
+    from spyhop.analytics.context_fusion import (  # noqa: PLC0415
+        in_tuna_thermal_range, SST_NO_DATA,
+    )
+    sst = v.sst_celsius
+    if sst == SST_NO_DATA:
+        return None
+    if not (v.sst_at_thermal_front or in_tuna_thermal_range(sst)):
+        return None
+
+    loitering = v.loitering_hours > 0.5 or v.behavior in ("loitering", "trawling")
+    if not loitering:
+        return None
+
+    vtype = (v.vessel_type or "").lower()
+    is_fishing = any(
+        kw in vtype for kw in (
+            "fishing", "trawler", "seiner", "longliner", "pole", "dredger"
+        )
+    )
+    front_str = "Temperaturfront" if v.sst_at_thermal_front else f"{sst:.1f}°C (Thunfisch-Zone)"
+
+    if is_fishing:
+        return RiskReason(
+            points=20,
+            label="Fischerei an Temperaturfront",
+            detail=(
+                f"Fischerboot an {front_str}: Thunfischarten sammeln sich an "
+                "SST-Fronten (Grenze zwischen warmem/kaltem Wasser). "
+                f"Schiff lauert seit {v.loitering_hours:.1f} h. "
+                "Aktive Fischerei wahrscheinlich. (Zainuddin et al. 2017)"
+            ),
+        )
+    return RiskReason(
+        points=12,
+        label="Undeklariertes Fischen vermutet",
+        detail=(
+            f"Nicht-Fischer an {front_str} — lauert wie ein Fischerboot. "
+            "Moegliche Typverschleierung oder undeklariete Fischerei."
+        ),
+    )
+
+
+def rule_weather_suppression(v: Vessel) -> Optional[RiskReason]:
+    """Sturm-Entlastung: Driften bei schwerem Wetter ist kein Verhaltenssignal.
+
+    Wenn ein Schiff bei Wellenhöhen >= 5 m oder Windstaerken >= 40 kn nur
+    langsam faehrt oder driftet ('beigedreht'), ist das eine normale nautische
+    Sicherheitsmassnahme ('Abwettern'). Ohne Wetterdaten wuerde das System
+    faelschlicherweise ein Rendezvous oder ein Loitering-Signal ausloesen.
+
+    Gibt einen negativen Risiko-Kredit zurueck, der das automatisch generierte
+    Loitering-Signal (-rule_loitering) und aehnliche Signale abmildert.
+    """
+    from spyhop.analytics.context_fusion import is_storm_conditions  # noqa: PLC0415
+    if not is_storm_conditions(v.wave_height_m, v.wind_speed_kn):
+        return None
+    if v.speed_knots > 3.0:
+        return None
+
+    wave_str = (
+        f"Wellenhoehe {v.wave_height_m:.1f} m"
+        if v.wave_height_m >= 0 else ""
+    )
+    wind_str = (
+        f"Wind {v.wind_speed_kn:.0f} kn"
+        if v.wind_speed_kn >= 0 else ""
+    )
+    cond = " / ".join(filter(None, [wave_str, wind_str]))
+
+    return RiskReason(
+        points=-20,
+        label="Sturm-Entlastung",
+        detail=(
+            f"Schiff driftet bei extremem Wetter ({cond}). "
+            "Normales Abwettern nach WMO-Skala 7-8 — kein Verhaltens-Alarm. "
+            "Loitering-Signal wird reduziert. (CMEMS Wellenhoehenprodukt)"
+        ),
+        evidence_type="heuristic",
+    )
+
+
+def rule_historical_offender(v: Vessel) -> Optional[RiskReason]:
+    """Wiederholungstaeter: Schiff hat in der Vergangenheit hohen Risikowert.
+
+    Ein hohes historisches Profil erhoeh die Prior-Wahrscheinlichkeit aktueller
+    illegaler Aktivitaet. Schiffe, die wiederholt in Schutzgebieten, auf
+    Blacklists oder mit AIS-Luecken aufgefallen sind, sollen nicht 'nochmal
+    vom Null' starten koennen.
+    """
+    hs = v.historical_risk_score
+    if hs < 0:
+        return None  # new vessel, no history
+
+    if hs >= 80:
+        return RiskReason(
+            points=20,
+            label="Chronischer Risikotraeger",
+            detail=(
+                f"Historischer Risikowert: {hs:.0f}/100 in den letzten 30 Tagen. "
+                "Schiff ist wiederholt durch Hochrisiko-Verhalten aufgefallen. "
+                "Erhoehte Prior-Wahrscheinlichkeit illegaler Aktivitaet."
+            ),
+        )
+    if hs >= 60:
+        return RiskReason(
+            points=12,
+            label="Vorangehende Risiko-Vorfaelle",
+            detail=(
+                f"Historischer Risikowert: {hs:.0f}/100. "
+                "Schiff hat frueher Risiko-Signale ausgeloest — verstaerkte Beobachtung."
+            ),
+        )
+    return None
+
+
+def rule_type_mismatch(v: Vessel) -> Optional[RiskReason]:
+    """AIS-Typ widerspricht dem offiziellen Registertyp — Identitaetsverschleierung.
+
+    Betreiber illegaler Fischerei tragen gelegentlich einen anderen Schiffstyp in
+    das AIS ein, um Fischerei-Kontrollsysteme zu umgehen. Ein im Register als
+    'Trawler' eingetragenes Schiff, das per AIS als 'Cargo' sendet, ist ein
+    starkes Indiz fuer eine bewusste Manipulation.
+
+    Datenquelle: MMSI-Profil-Cache (IHS Markit / Equasis), 30-Tage-Redis-Cache.
+    """
+    from spyhop.analytics.context_fusion import type_mismatch_severity  # noqa: PLC0415
+    severity = type_mismatch_severity(
+        v.vessel_type or "", v.verified_vessel_type or ""
+    )
+    if severity is None:
+        return None
+
+    if severity == "critical":
+        return RiskReason(
+            points=30,
+            label="AIS-Typ gefaelscht (Fischerei↔Cargo)",
+            detail=(
+                f"Register (IHS/Equasis): '{v.verified_vessel_type}' — "
+                f"AIS meldet: '{v.vessel_type}'. "
+                "Ein als Fischerboot registriertes Schiff sendet als Frachter: "
+                "klassische Fischerei-Tarnung. (IMO Circular FAL.2/Circ.127)"
+            ),
+            evidence_type="hard",
+        )
+    return RiskReason(
+        points=10,
+        label="AIS-Typ abweichend vom Register",
+        detail=(
+            f"Register: '{v.verified_vessel_type}' — AIS: '{v.vessel_type}'. "
+            "Typ-Diskrepanz beobachtenswert. Koennte auf manuelle Aenderung hindeuten."
+        ),
+    )
+
+
 # Die Regel-Registry. NEUE REGELN werden ausschliesslich hier eingetragen -
 # kein anderer Code muss angefasst werden.
 RULES: List[Rule] = [
@@ -296,6 +814,20 @@ RULES: List[Rule] = [
     rule_ais_gap,
     rule_loitering,
     rule_flag_of_convenience,
+    rule_behavior_profile,
+    rule_trajectory_pattern,
+    rule_pair_transshipment,
+    rule_kinematic_violation,
+    rule_static_coords,
+    # Contextual fusion (environment + registry):
+    rule_thermal_front_loitering,
+    rule_weather_suppression,
+    rule_historical_offender,
+    rule_type_mismatch,
+    # Spatial / geofencing rules (proximity, skirting, sustained zone presence):
+    rule_mpa_proximity,
+    rule_time_in_mpa,
+    rule_border_skirting,
     # statische, gecachte offizielle Quellen (Cache-only):
     rule_iuu_list_hit,
     rule_sanctions_hit,
@@ -312,6 +844,7 @@ def _load_transhipment_rules() -> "List[Rule]":
         signal_mpa_reefer,
         signal_port_evasion,
         signal_dark_fleet_proximity,
+        signal_dark_partner_inferred,
     )
     return [
         signal_remote_reefer,
@@ -319,6 +852,7 @@ def _load_transhipment_rules() -> "List[Rule]":
         signal_mpa_reefer,
         signal_port_evasion,
         signal_dark_fleet_proximity,
+        signal_dark_partner_inferred,
     ]
 
 
@@ -343,7 +877,7 @@ def assess(vessel: Vessel, rules: Optional[List[Rule]] = None) -> TargetAssessme
             reasons.append(reason)
 
     raw_score = sum(r.points for r in reasons)
-    score = min(raw_score, SCORE_CAP)
+    score = max(0.0, min(raw_score, SCORE_CAP))
     # Staerkste Begruendung zuerst - die UI zeigt sie als top_reason.
     reasons.sort(key=lambda r: r.points, reverse=True)
     return TargetAssessment(vessel=vessel, score=score, reasons=reasons)
@@ -380,7 +914,7 @@ def compound_score(vessel: Vessel) -> TargetAssessment:
         reasons.append(compound_explanation(raw_score))
         raw_score *= COMPOUND_MULTIPLIER
 
-    score = min(raw_score, SCORE_CAP)
+    score = max(0.0, min(raw_score, SCORE_CAP))
     reasons.sort(key=lambda r: r.points, reverse=True)
     return TargetAssessment(vessel=vessel, score=score, reasons=reasons)
 
