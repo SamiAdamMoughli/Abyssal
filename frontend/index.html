@@ -453,6 +453,114 @@
       border: 1px solid var(--ss-blue);
     }
 
+    /* Behavior badge */
+    .behavior-badge {
+      display: inline-block;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border-radius: 2px;
+      white-space: nowrap;
+    }
+    .beh-trawling  { background: var(--ss-orange-15); border: 1px solid var(--ss-orange-40); color: var(--ss-orange); }
+    .beh-loitering { background: rgba(255,170,0,0.12); border: 1px solid rgba(255,170,0,0.4); color: var(--ss-amber); }
+    .beh-transit   { background: rgba(0,180,80,0.10); border: 1px solid rgba(0,180,80,0.35); color: #00c060; }
+    .beh-anchored  { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.18); color: var(--ss-w60); }
+
+    /* Spatial badges */
+    .spatial-badge {
+      display: inline-block;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border-radius: 2px;
+      white-space: nowrap;
+    }
+    .sp-proximity { background: rgba(255,170,0,0.12); border: 1px solid rgba(255,170,0,0.5); color: var(--ss-amber); }
+    .sp-skirting  { background: var(--ss-orange-15); border: 1px solid var(--ss-orange-40); color: var(--ss-orange); }
+    .sp-timeinzone { background: rgba(255,16,83,0.12); border: 1px solid rgba(255,16,83,0.4); color: var(--ss-red); }
+
+    /* V2V encounter badges */
+    .encounter-badge {
+      display: inline-block;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border-radius: 2px;
+      white-space: nowrap;
+    }
+    .enc-transshipment {
+      background: rgba(255,16,83,0.20);
+      border: 1px solid rgba(255,16,83,0.6);
+      color: var(--ss-red);
+    }
+    .enc-bunkering {
+      background: rgba(255,170,0,0.12);
+      border: 1px solid rgba(255,170,0,0.5);
+      color: var(--ss-amber);
+    }
+    .enc-fishing_coord {
+      background: var(--ss-orange-15);
+      border: 1px solid var(--ss-orange-40);
+      color: var(--ss-orange);
+    }
+
+    /* Trajectory pattern badges */
+    .traj-badge {
+      display: inline-block;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border-radius: 2px;
+      white-space: nowrap;
+    }
+    .traj-grid    { background: var(--ss-orange-15); border: 1px solid var(--ss-orange-40); color: var(--ss-orange); }
+    .traj-holding { background: rgba(255,16,83,0.12); border: 1px solid rgba(255,16,83,0.4); color: var(--ss-red); }
+    .traj-spiral  { background: rgba(255,170,0,0.12); border: 1px solid rgba(255,170,0,0.5); color: var(--ss-amber); }
+    .traj-anomaly { background: rgba(255,16,83,0.20); border: 1px solid rgba(255,16,83,0.6); color: var(--ss-red); }
+
+    /* Gap / Spoofing badges */
+    .gap-badge {
+      display: inline-block;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border-radius: 2px;
+      white-space: nowrap;
+    }
+    .gap-tactical  { background: rgba(255,16,83,0.15);  border: 1px solid rgba(255,16,83,0.5);  color: var(--ss-red); }
+    .gap-spoofing  { background: rgba(255,16,83,0.25);  border: 1px solid var(--ss-red);         color: var(--ss-red); }
+    .gap-technical { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); color: var(--ss-w60); }
+    .gap-unknown   { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); color: var(--ss-w60); }
+    .spoof-badge   { background: rgba(255,16,83,0.30);  border: 1px solid var(--ss-red);         color: var(--ss-red);
+                     animation: spoof-pulse 1.1s ease-in-out infinite; }
+
+    /* Context fusion badges */
+    .ctx-badge {
+      display: inline-block;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.7px;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border-radius: 2px;
+      white-space: nowrap;
+    }
+    .ctx-storm  { background: rgba(100,180,255,0.12); border: 1px solid rgba(100,180,255,0.4); color: #64b4ff; }
+    .ctx-front  { background: rgba(255,170,0,0.12);   border: 1px solid rgba(255,170,0,0.45);  color: var(--ss-amber); }
+    .ctx-hist   { background: rgba(255,100,0,0.12);   border: 1px solid rgba(255,100,0,0.40);  color: #ff6400; }
+    .ctx-typmm  { background: rgba(255,16,83,0.18);   border: 1px solid rgba(255,16,83,0.50);  color: var(--ss-red); }
+
     /* Skeleton */
     .skeleton {
       height: 74px;
@@ -580,6 +688,29 @@
     }
 
     /* ---------------- VESSEL MARKERS (SVG-based) ---------------- */
+    /* Gap uncertainty circle (dashed, fades to edge) */
+    .gap-uncertainty path, .gap-uncertainty circle {
+      stroke-dasharray: 6 6;
+      opacity: 0.55;
+    }
+
+    /* Spoofing pulse ring on the marker icon */
+    @keyframes spoof-pulse {
+      0%   { opacity: 1;   transform: scale(1.0); }
+      50%  { opacity: 0.2; transform: scale(1.7); }
+      100% { opacity: 1;   transform: scale(1.0); }
+    }
+    .vessel-spoofing::after {
+      content: '';
+      position: absolute;
+      inset: -6px;
+      border: 2px solid var(--ss-red);
+      border-radius: 50%;
+      animation: spoof-pulse 1.1s ease-in-out infinite;
+      pointer-events: none;
+    }
+    .vessel-spoofing { position: relative; }
+
     /* Leaflet DivIcon wrapper for SVG vessel icons */
     .vessel-icon {
       overflow: visible !important;
@@ -1321,7 +1452,7 @@
         v.name,
         String(v.mmsi),
         v.flag,
-        v.top_reason?.label,
+        v.top_reason_label,
         (v.reasons || []).map(r => r.label).join(' ')
       ].some(value => value && value.toLowerCase().includes(q));
     }
@@ -1472,34 +1603,53 @@
 
     // Builds a Leaflet DivIcon: SVG shape + risk color + glow + hi-risk pulse ring.
     function getVesselSvgIcon(v) {
-      const score = v.score || 0;
+      const score = v.risk_score || 0;
       const type = String(v.vessel_type || 'unknown').toLowerCase();
       const { fill, glow } = riskFill(score);
       const edgeStroke = 'rgba(255,255,255,0.4)';
       const { inner, w, h } = vesselShape(type, fill, edgeStroke);
       const riskCls = score > 70 ? 'vessel-hi' : (score > 30 ? 'vessel-mid' : 'vessel-lo');
+      const spoofCls = v.spoofing_flag ? ' vessel-spoofing' : '';
       const svgHtml = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" ` +
                       `style="filter:drop-shadow(0 0 4px ${glow});overflow:visible">${inner}</svg>`;
       return L.divIcon({
-        className: `vessel-icon ${riskCls}`,
+        className: `vessel-icon ${riskCls}${spoofCls}`,
         html: svgHtml,
         iconSize: [w, h],
         iconAnchor: [w / 2, h / 2],
       });
     }
 
+    function _gapCircleRadius(v) {
+      // Radius of the "where could this vessel be?" uncertainty circle in metres.
+      // Uses declared SOG or 5 kn fallback if stationary / unknown.
+      const sog = Math.max(v.speed_knots || 0, 1.0);
+      return (v.ais_gap_hours || 0) * sog * 1852;
+    }
+
     function createMarkerForVessel(v) {
       const marker = L.marker([v.lat, v.lon], { icon: getVesselSvgIcon(v) });
       marker.bindPopup(popupHtml(v), { maxWidth: 300 });
       let ring = null;
+      let gapCircle = null;
       if (v.in_protected_area) {
         ring = L.circleMarker([v.lat, v.lon], {
           radius: radiusFor(v) * 3,
           color: css('--ss-orange'), weight: 1, fillOpacity: 0, dashArray: '3 3'
         }).addTo(ringLayer);
       }
+      if ((v.ais_gap_hours || 0) >= 2) {
+        gapCircle = L.circle([v.lat, v.lon], {
+          radius: _gapCircleRadius(v),
+          color: v.gap_type === 'tactical_dark' ? css('--ss-red') : css('--ss-amber'),
+          weight: 1.5,
+          fillOpacity: 0.04,
+          dashArray: '6 8',
+          className: 'gap-uncertainty',
+        }).addTo(gapLayer);
+      }
       marker.addTo(markerLayer);
-      return { marker, ring, data: v };
+      return { marker, ring, gapCircle, data: v };
     }
 
     function updateMarkerForVessel(v, entry) {
@@ -1519,6 +1669,30 @@
         ringLayer.removeLayer(entry.ring);
         entry.ring = null;
       }
+      const hasGap = (v.ais_gap_hours || 0) >= 2;
+      if (hasGap) {
+        if (entry.gapCircle) {
+          entry.gapCircle.setLatLng([v.lat, v.lon]);
+          entry.gapCircle.setRadius(_gapCircleRadius(v));
+          entry.gapCircle.setStyle({
+            color: v.gap_type === 'tactical_dark'
+              ? css('--ss-red') : css('--ss-amber'),
+          });
+        } else {
+          entry.gapCircle = L.circle([v.lat, v.lon], {
+            radius: _gapCircleRadius(v),
+            color: v.gap_type === 'tactical_dark'
+              ? css('--ss-red') : css('--ss-amber'),
+            weight: 1.5,
+            fillOpacity: 0.04,
+            dashArray: '6 8',
+            className: 'gap-uncertainty',
+          }).addTo(gapLayer);
+        }
+      } else if (entry.gapCircle) {
+        gapLayer.removeLayer(entry.gapCircle);
+        entry.gapCircle = null;
+      }
       entry.data = v;
     }
 
@@ -1537,9 +1711,8 @@
         if (!nextMmsi.has(mmsi)) {
           const existing = markersByMmsi[mmsi];
           markerLayer.removeLayer(existing.marker);
-          if (existing.ring) {
-            ringLayer.removeLayer(existing.ring);
-          }
+          if (existing.ring) ringLayer.removeLayer(existing.ring);
+          if (existing.gapCircle) gapLayer.removeLayer(existing.gapCircle);
           delete markersByMmsi[mmsi];
         }
       });
@@ -1625,26 +1798,155 @@
 
     const markerLayer = L.layerGroup().addTo(map);   // Schiffe
     const ringLayer = L.layerGroup().addTo(map);     // orange Ringe (in MPA)
+    const gapLayer = L.layerGroup().addTo(map);      // gestrichelte Unsicherheitskreise (AIS-Gap)
     const mpaLayer = L.layerGroup().addTo(map);      // Schutzgebiets-Polygone
     const markersByMmsi = {};
 
     function radiusFor(v) {
-      const c = riskClass(v.score);
-      if (c === 'hi') return 8 + v.score / 12;
-      if (c === 'mid') return 6 + v.score / 15;
+      const c = riskClass(v.risk_score);
+      if (c === 'hi') return 8 + v.risk_score / 12;
+      if (c === 'mid') return 6 + v.risk_score / 15;
       return 5;
     }
+    function spatialBadges(v) {
+      const parts = [];
+      if (v.border_skirting) {
+        parts.push(`<span class="spatial-badge sp-skirting">GRENZ-SCHLEICHEN</span>`);
+      }
+      const nm = v.nearest_mpa_nm;
+      if (!v.in_protected_area && nm >= 0 && nm <= 5) {
+        const label = nm <= 2 ? `${nm.toFixed(1)} NM ZUR MPA` : `${nm.toFixed(1)} NM PUFFERZONE`;
+        parts.push(`<span class="spatial-badge sp-proximity">${label}</span>`);
+      }
+      const h = v.time_in_zone_hours || 0;
+      if (v.in_protected_area && h >= 2) {
+        parts.push(`<span class="spatial-badge sp-timeinzone">IN MPA ${h.toFixed(0)}H</span>`);
+      }
+      return parts.join('');
+    }
+
+    const BEHAVIOR_LABELS = {
+      trawling:  'TRAWLING',
+      loitering: 'LOITERING',
+      transit:   'TRANSIT',
+      anchored:  'ANCHORED',
+    };
+    function behaviorBadge(v) {
+      const b = (v.behavior_status || '').toLowerCase();
+      if (!b || b === 'unknown') return '';
+      const label = BEHAVIOR_LABELS[b] || b.toUpperCase();
+      const conf = v.behavior_confidence > 0
+        ? ` ${Math.round(v.behavior_confidence * 100)}%`
+        : '';
+      return `<span class="behavior-badge beh-${b}">${label}${conf}</span>`;
+    }
+
+    const ENCOUNTER_LABELS = {
+      transshipment: 'TRANSSHIPMENT',
+      bunkering:     'BUNKERING',
+      fishing_coord: 'FISCHEREI-KOORDINATION',
+    };
+    function encounterBadge(v) {
+      const mc = (v.rendezvous_meeting_class || '').toLowerCase();
+      if (!mc || mc === 'unknown' || mc === 'port_assist'
+          || mc === 'vessel_to_vessel') return '';
+      const dur = v.rendezvous_duration_hours > 0
+        ? ` ${v.rendezvous_duration_hours.toFixed(1)}H`
+        : '';
+      const label = ENCOUNTER_LABELS[mc] || mc.toUpperCase();
+      return `<span class="encounter-badge enc-${mc}">${label}${dur}</span>`;
+    }
+
+    const TRAJ_LABELS = {
+      grid:    'GITTER-TRAJEKT.',
+      holding: 'WARTE-MUSTER',
+      spiral:  'SPIRAL-MUSTER',
+      anomaly: 'TRAJEKT.-ANOMALIE',
+      transit: '',
+    };
+    function trajectoryBadge(v) {
+      const tp = (v.trajectory_pattern || '').toLowerCase();
+      if (!tp || tp === 'unknown' || tp === 'transit') return '';
+      const conf = v.trajectory_confidence > 0
+        ? ` ${Math.round(v.trajectory_confidence * 100)}%`
+        : '';
+      const label = TRAJ_LABELS[tp] || tp.toUpperCase();
+      return `<span class="traj-badge traj-${tp}">${label}${conf}</span>`;
+    }
+
+    function weatherBadge(v) {
+      const wave = v.wave_height_m != null ? v.wave_height_m : -1;
+      const wind = v.wind_speed_kn  != null ? v.wind_speed_kn  : -1;
+      const inStorm = (wave >= 5) || (wind >= 40);
+      if (!inStorm) return '';
+      const parts = [];
+      if (wave >= 5)  parts.push(`Hs ${wave.toFixed(1)}m`);
+      if (wind >= 40) parts.push(`${wind.toFixed(0)}kn`);
+      return `<span class="ctx-badge ctx-storm">STURM ${parts.join(' / ')}</span>`;
+    }
+
+    function contextBadges(v) {
+      const parts = [];
+      if (v.sst_at_thermal_front) {
+        const sst = v.sst_celsius > -999
+          ? ` ${v.sst_celsius.toFixed(1)}°C` : '';
+        parts.push(`<span class="ctx-badge ctx-front">TEMP-FRONT${sst}</span>`);
+      }
+      if (v.historical_risk_score >= 60) {
+        parts.push(`<span class="ctx-badge ctx-hist">VORBELASTET ${v.historical_risk_score.toFixed(0)}</span>`);
+      }
+      if (v.verified_vessel_type && v.verified_vessel_type !== v.vessel_type) {
+        parts.push(`<span class="ctx-badge ctx-typmm">TYP ≠ REGISTER</span>`);
+      }
+      return parts.join('');
+    }
+
+    const GAP_TYPE_LABELS = {
+      tactical_dark:    'TAKT. DUNKEL',
+      technical_failure:'AIS-AUSFALL',
+      spoofing:         'POS.-SPRUNG',
+      unknown:          'GAP',
+    };
+    function gapBadge(v) {
+      const gh = v.ais_gap_hours || 0;
+      if (gh < 2) return '';
+      const gt = (v.gap_type || 'unknown').toLowerCase();
+      const label = GAP_TYPE_LABELS[gt] || 'GAP';
+      const cls = gt === 'tactical_dark' ? 'gap-tactical'
+                : gt === 'spoofing'      ? 'gap-spoofing'
+                : gt === 'technical_failure' ? 'gap-technical'
+                : 'gap-unknown';
+      return `<span class="gap-badge ${cls}">${label} ${gh.toFixed(0)}H</span>`;
+    }
+
+    function spoofingBadge(v) {
+      if (!v.spoofing_flag) return '';
+      const kn = v.spoofing_max_speed_kn || 0;
+      const detail = kn >= 50 ? ` ${kn.toFixed(0)}KN` : '';
+      return `<span class="gap-badge spoof-badge">SPOOFING${detail}</span>`;
+    }
+
     function popupHtml(v) {
-      const cls = riskClass(v.score);
+      const cls = riskClass(v.risk_score);
       const type = String(v.vessel_type || 'unknown').toLowerCase();
       const rules = (v.reasons || []).map(r =>
         `<li><span class="b">▸ ${r.label} +${r.points}</span><br>${r.detail || ''}</li>`).join('');
       const mpaBadge = v.in_protected_area ? `<div class="pop-mpa">⚠ IN PROTECTED AREA</div>` : '';
+      const behBadge = behaviorBadge(v);
+      const spBadges = spatialBadges(v);
+      const trBadge  = trajectoryBadge(v);
+      const encBadge = encounterBadge(v);
+      const gBadge   = gapBadge(v);
+      const spfBadge = spoofingBadge(v);
+      const wBadge   = weatherBadge(v);
+      const ctxBdg   = contextBadges(v);
+      const extraBadges = [spBadges, trBadge, encBadge, gBadge, spfBadge, wBadge, ctxBdg].filter(Boolean).join('');
       return `
         <div class="pop-name">${v.name}</div>
-        <div class="pop-score ${cls}">${v.score.toFixed(1)}</div>
+        <div class="pop-score ${cls}">${v.risk_score.toFixed(1)}</div>
         <div class="pop-mmsi">MMSI ${v.mmsi} · ${flagEmoji(v.flag)} ${v.flag} · ${v.speed_knots.toFixed(1)} KN</div>
-        <div class="pop-type">${categoryLabel(type)} · ${subtypeLabel(type)}</div>
+        <div class="pop-type">${categoryLabel(type)} · ${subtypeLabel(type)}${behBadge ? ' &nbsp;' + behBadge : ''}</div>
+        ${extraBadges ? `<div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap">${extraBadges}</div>` : ''}
         ${mpaBadge}
         ${rules ? `<ul class="pop-rules">${rules}</ul>` : `<div class="pop-mmsi" style="margin-top:8px">No risk reasons.</div>`}
       `;
@@ -1673,7 +1975,7 @@
         return;
       }
       visible.forEach((v, i) => {
-        const cls = riskClass(v.score);
+        const cls = riskClass(v.risk_score);
         const badges = (v.reasons || []).map(r => `<span class="rule-badge">${r.label}</span>`).join('');
         const type = String(v.vessel_type || 'unknown').toLowerCase();
         const card = document.createElement('div');
@@ -1683,7 +1985,7 @@
         card.innerHTML = `
           <div class="card-row1">
             <span class="card-name">${v.name}</span>
-            <span class="badge badge-${cls}">${v.score.toFixed(1)}</span>
+            <span class="badge badge-${cls}">${v.risk_score.toFixed(1)}</span>
           </div>
           <div class="card-row2">
             <span>${flagEmoji(v.flag)} ${v.flag}</span><span class="sep">/</span>
@@ -1691,7 +1993,17 @@
             <span>${subtypeLabel(type)}</span>
           </div>
           ${badges ? `<div class="rule-badges">${badges}</div>` : ''}
-          ${v.in_protected_area ? `<div class="mpa-flag">🛡 IN MPA</div>` : ''}`;
+          <div style="display:flex;gap:5px;margin-top:${badges ? '4' : '8'}px;flex-wrap:wrap">
+            ${behaviorBadge(v)}
+            ${spatialBadges(v)}
+            ${trajectoryBadge(v)}
+            ${encounterBadge(v)}
+            ${gapBadge(v)}
+            ${spoofingBadge(v)}
+            ${weatherBadge(v)}
+            ${contextBadges(v)}
+            ${v.in_protected_area ? `<span class="mpa-flag" style="margin:0">🛡 IN MPA</span>` : ''}
+          </div>`;
         c.appendChild(card);
       });
     }
