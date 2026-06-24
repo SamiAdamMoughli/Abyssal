@@ -1,456 +1,304 @@
 # 🛰️ Mission Radar
 
-Ein **Decision-Support-System**, das mögliche Ziele bei der Bekämpfung illegaler
-Fischerei priorisiert — und dabei **immer erklärt, warum**. Vorbilder: Global
-Fishing Watch, Sea Shepherd. Naturschutz-Projekt.
+**A real-time maritime intelligence dashboard for ocean conservation.**  
+Surfaces the highest-risk vessels in any ocean region — and always explains *why*.
 
-> Mission Radar ist **kein** reines Daten-Dashboard. Es soll erklärbar sagen:
-> *„Hier sind die wahrscheinlichsten Ziele, und das ist der Grund."*
-> Erklärbarkeit hat Vorrang vor Cleverness.
+[![Python](https://img.shields.io/badge/Python-3.12-3776ab?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Vite](https://img.shields.io/badge/Vite-5-646cff?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![PostGIS](https://img.shields.io/badge/PostGIS-3.4-336791?style=flat-square&logo=postgresql&logoColor=white)](https://postgis.net/)
+[![Celery](https://img.shields.io/badge/Celery-5-37814a?style=flat-square&logo=celery&logoColor=white)](https://docs.celeryq.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
 
-📐 **Zielbild & Leitprinzipien:** [ARCHITECTURE.md](ARCHITECTURE.md) — beschreibt die
-Vision und die bewusste Grenze zwischen automatischer Schiffs-/Verhaltensanalyse
-(Zone A) und menschengeführter Ermittlungsarbeit über Personen (Zone B).
+![Mission Radar — live vessel risk map](./docs/assets/demo.gif)
 
----
-
-## Was heute wirklich läuft (vs. geplant)
-
-Ehrlicher Stand — das System trennt klar zwischen Gebautem und Geplantem:
-
-| Funktioniert heute | Status |
-| --- | --- |
-| Regelbasierte Risk Engine (5 Regeln, erklärbar) | ✅ |
-| Synthetische Datenquelle (läuft **ohne** Token) | ✅ |
-| Echte AIS-Daten via Global Fishing Watch API v3 (mit Token) | ✅ |
-| Echte WDPA-Schutzgebiete via Global Forest Watch Data API (mit Key) | ✅ |
-| Dynamische Region („Search this area", bbox pro Anfrage, weltweit) | ✅ |
-| MPA-Layer auf der Karte + Highlight für Schiffe im Schutzgebiet | ✅ |
-| Score-Kalibrierung + Validierung gegen bekannte IUU-Fälle | ✅ |
-| Sea-Shepherd-UI (dark, mobil) | ✅ |
-
-| Geplant / Vision | Phase |
-| --- | --- |
-| Hotspot-Intelligence (4Wings apparent fishing effort) | 3 |
-| Muster-/Anomalie-Erkennung | 3 |
-| Schiffsprofile + Abgleich offizieller Listen (FAO/RFMO) | 4 |
-| Analysten-Workspace (Fälle/Notizen, **menschengeführt**) | 5 (Zone B) |
-
-Details und die Roadmap: [ARCHITECTURE.md](ARCHITECTURE.md), Abschnitt 6.
+> **Inspired by:** Global Fishing Watch · Sea Shepherd · SkyTruth
 
 ---
 
-## Architektur
+## Table of Contents
 
-```
-   ┌─────────────────────┐     ┌───────────────┐     ┌───────────┐     ┌──────────────┐
-   │   Datenquelle       │     │  Risk Engine  │     │  FastAPI  │     │   Frontend   │
-   │  (Phase 1:          │ ──▶ │  (regel-      │ ──▶ │  (REST,   │ ──▶ │  (Leaflet,   │
-   │   synthetisch)      │     │   basiert)    │     │   JSON)   │     │   kein Build)│
-   │                     │     │               │     │           │     │              │
-   │  sample_data.py     │     │ risk_engine.py│     │  main.py  │     │  index.html  │
-   └─────────────────────┘     └───────────────┘     └───────────┘     └──────────────┘
-        AUSTAUSCHBAR              FEST / STABIL
-```
-
-**Wichtigster Designgrundsatz: Die Datenquelle ist austauschbar, die Engine nicht.**
-
-Die Engine (`risk_engine.py`) hängt nur von der `Vessel`-Datenklasse ab — nie von
-einer konkreten Datenquelle. Die Datenquelle erfüllt das `VesselSource`-Protokoll
-und liefert `List[Vessel]`. In **Phase 2** wird ausschließlich die Datenquelle
-ersetzt (z. B. durch einen Global-Fishing-Watch-API-Adapter), indem `get_source()`
-in [sample_data.py](backend/app/sample_data.py) eine andere Implementierung
-zurückgibt. **Engine und API bleiben unangetastet.**
-
-### Projektstruktur
-
-```
-Abyssal/
-├── backend/
-│   └── app/
-│       ├── risk_engine.py   # Herzstück: Regeln, Vessel, Scoring, rank_targets
-│       ├── sample_data.py   # austauschbare Datenquelle (synthetisch)
-│       ├── geo.py           # Geo-Logik: Punkt-in-Schutzgebiet (shapely/geopandas)
-│       └── main.py          # FastAPI-Endpunkte (dünn, ohne Fachlogik)
-│   └── data/
-│       └── protected_areas.geojson  # Schutzgebiets-Polygone (Platzhalter)
-├── frontend/
-│   └── index.html           # Leaflet-Karte + Target-Liste, kein Build-Step
-└── README.md
-```
+- [Why](#-why)
+- [Quick Start](#-quick-start)
+- [Architecture](#️-architecture)
+- [Features](#-features)
+- [Tech Stack](#-tech-stack)
+- [API Reference](#-api-reference)
+- [Environment Variables](#-environment-variables)
+- [Risk Scoring](#️-risk-scoring)
+- [Analytics Modules](#-analytics-modules)
+- [Data Sources](#-data-sources)
 
 ---
 
-## Setup
+## 🌊 Why
 
-Voraussetzung: **Python 3.14** (siehe [.python-version](.python-version)). Abhängigkeiten in [backend/requirements.txt](backend/requirements.txt) (`pip install -r requirements.txt`).
+Every day, hundreds of thousands of vessels move across the world's oceans. For a conservation NGO the challenge isn't too *little* data — it's too *much*, without prioritisation. Illegal, unreported and unregulated (IUU) fishing costs an estimated **$23 billion a year** and devastates marine ecosystems.
+
+Mission Radar fuses live AIS streams, protected-area geometry, vessel blacklists and behavioural analytics into a single ranked list of targets. Every score carries an explanation — because a tool that says *"this ship is suspicious"* without a reason is useless in the field.
+
+**Two hard design constraints:**
+
+- **Zone A (automated):** vessel behaviour, spatial violations, blacklist hits — fully machine-scored.
+- **Zone B (human-led):** ownership, persons, corporate structure — intentionally *not* automated. See [ARCHITECTURE.md](ARCHITECTURE.md).
+
+---
+
+## 🚀 Quick Start
+
+### Option A — Docker (full production stack, recommended)
 
 ```bash
-# 1. ins Backend wechseln
-cd backend
+# 1. Clone and configure
+git clone https://github.com/your-username/mission-radar.git
+cd mission-radar
+cp .env.example .env          # fill in your API keys
 
-# 2. virtuelle Umgebung
-python3 -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+# 2. Spin up all services (PostGIS · Redis · API · Celery · Flower)
+docker compose up --build
 
-# 3. Abhängigkeiten
+# 3. Open the dashboard
+open http://localhost:5173    # Vite dev server (see Option B below)
+# API health check
+curl http://localhost:8000/
+```
+
+### Option B — Local dev (no Docker)
+
+#### Backend
+
+```bash
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# 4. API starten (aus dem Ordner backend/)
-uvicorn app.main:app --reload
+# Needs a running PostGIS instance — use Docker just for the DB:
+docker compose up db redis -d
+
+# Run Alembic migrations
+alembic upgrade head
+
+# Start the API
+uvicorn backend.app.main:app --reload --port 8000
 ```
 
-Die API läuft dann auf <http://localhost:8000>.
-
-| Endpoint        | Zweck                                             |
-| --------------- | ------------------------------------------------- |
-| `GET /`         | Health-Check                                      |
-| `GET /api/targets` | Top-N Ziele mit Begründung (gerankt)           |
-| `GET /api/vessels` | alle Schiffe mit Score (für die Karte)         |
-
-Beide `/api/*`-Endpunkte akzeptieren `?source=synthetic` (Default) oder `?source=gfw`.
-
-**Frontend:** [frontend/index.html](frontend/index.html) im Browser öffnen
-(Doppelklick reicht — CORS ist offen). Ist das Backend nicht gestartet, zeigt die
-Seite eine klare Fehlermeldung statt einer leeren Karte.
-
----
-
-## Datenquellen-Strategie: drei Klassen nach Aktualisierungsrhythmus
-
-Wichtigste Performance-Entscheidung: Daten werden nach ihrem Änderungsrhythmus
-getrennt, damit der **Request-Pfad schnell** bleibt (gemessen: synthetic
-`/api/targets` ~2–3 ms, inkl. aller Cache-Lookups).
-
-| Klasse | Quellen | Im Request-Pfad? |
-| --- | --- | --- |
-| **STATISCH** (gecacht, Background-Refresh) | IUU-Liste, Sanktionen, EEZ, Port-State-Control | **nur Cache-Lookup** (kein Netzwerk) |
-| **LIVE** (pro bbox) | AIS-Positionen/Events (GFW v3) | ja, ein Live-Call |
-| **ASYNC** (Background-Worker) | Sentinel-1 SAR / VIIRS „dark vessels" | nein — Ergebnis wird gecacht |
-
-**Statische Quellen** ([app/sources/](backend/app/sources/)) werden **einmal beim
-Start** in In-Memory-Indizes geladen (`_warmup_static_sources`); die Regeln machen
-dann nur noch `dict`/`set`-Lookups (~1.6 µs). Aktualisiert werden sie durch einen
-Background-Job, **nie** im Request:
+#### Frontend
 
 ```bash
-cd backend && python -m app.refresh_sources    # z. B. täglich per Cron
+cd frontend-vite
+npm install
+cp .env.example .env.development   # VITE_API_URL=http://127.0.0.1:8000
+npm run dev                         # → http://localhost:5173
 ```
 
-### Ehrlicher Quellen-Stand
-
-| Quelle | Lizenz/Herkunft | Status |
-| --- | --- | --- |
-| **IUU-Liste** | CCAMLR NCP (offiziell, verifizierte IMO) | ✅ **echte Daten** (18 Schiffe), `rule_iuu_list_hit` feuert real |
-| **Sanktionen** | OpenSanctions (CC-BY 4.0 NC), konsolidiert OFAC/EU/UN/UK/… | ✅ **echte Daten** (**1.922 Schiffe** aus 15 Quellen), `rule_sanctions_hit` feuert real |
-| EEZ | Marine Regions / VLIZ (CC-BY) | 🧩 Loader bereit, keine GeoJSON eingespeist → Regel inaktiv |
-| Port-State-Control | Paris/Tokyo MoU (öffentlich) | 🧩 Loader bereit, keine Rohdaten → Regel inaktiv |
-| SAR „dark vessels" | Copernicus Sentinel-1 (offen) | 🚧 **Async-Gerüst** ([dark_vessels.py](backend/app/sources/dark_vessels.py)), bewusst nicht implementiert |
-
-> **Ehrlich:** Es werden **keine erfundenen** Sanktions-/EEZ-/PSC-Einträge
-> gebundelt. Die Loader normalisieren auf ein einheitliches Format und cachen;
-> ohne eingespeiste Rohdaten liefern sie leer, und die zugehörige Regel feuert
-> nicht. Echte Daten werden über `refresh_sources` bzw. lokale Dateien unter
-> `backend/data/sources/` eingespeist. Listen-Treffer tragen
-> `evidence_type="hard"` (Fakt einer Behörde) gegenüber `"heuristic"` für
-> Verhaltens-Signale — entsprechend der **Zone-A-Grenze** in
-> [ARCHITECTURE.md](ARCHITECTURE.md).
-
-> **Scope (Zone A):** Corporate-/Shell-Company-/Personen-Quellen (OpenCorporates,
-> ICIJ, OCCRP, UBO) sind hier **bewusst nicht** eingebunden. Sie betreffen
-> Personen und gehören hinter ein menschengeführtes Analysten-Modul (Zone B).
-
-### Zwei getrennte Risiko-Dimensionen (kein Doppeln)
-
-IUU-Liste und Sanktionsliste erfassen **unterschiedliche Populationen** verdächtiger
-Schiffe — beide legitim und Zone A, aber nicht deckungsgleich:
-
-| Dimension | Population | Quelle |
-| --- | --- | --- |
-| **IUU-Fischerei** | Toothfish-Poacher, illegale Fischer (Sea-Shepherd-Kernzielgruppe) | CCAMLR/RFMO |
-| **Sanktionen** | sanktionierte Tanker (Russland/Iran/Nordkorea — Ölschmuggel, Sanktionsumgehung) | OpenSanctions |
-
-Das wurde **gemessen**, nicht angenommen: Die IUU-Anker (Thunder/Kunlun/Viking)
-bekommen **keinen** Sanctions-Hit — sie stehen auf IUU-, nicht auf Sanktionslisten.
-Das Sanctions-Signal **ergänzt** das IUU-Signal, es doppelt es nicht. So wird
-Mission Radar breiter als ursprünglich geplant, ohne die Dimensionen zu vermischen.
+> **No API keys?** Set `DATA_SOURCE=synthetic` in `.env`. The backend runs entirely on generated data — no GFW token required.
 
 ---
 
-## Datenquellen: synthetisch vs. Global Fishing Watch
+## 🏗️ Architecture
 
-Mission Radar kann zwischen zwei Datenquellen umschalten — die Risk Engine bleibt
-dabei identisch, sie bekommt in beiden Fällen fertige `Vessel`-Objekte:
+```text
+┌──────────────┐   WebSocket   ┌───────────────────┐
+│  aisstream   │──────────────▶│  Celery Worker     │
+│  (live AIS)  │               │  ais_stream.py     │
+└──────────────┘               └────────┬──────────┘
+                                        │ persists pings
+                                        ▼
+┌──────────────┐   bbox query  ┌───────────────────┐   SSE stream  ┌──────────────────┐
+│  GFW API v3  │──────────────▶│  FastAPI + PostGIS │──────────────▶│  Vite frontend   │
+│  (vessels,   │               │  Risk Engine       │               │  Leaflet map     │
+│   events)    │               │  Analytics Suite   │               │  ES modules      │
+└──────────────┘               └───────────────────┘               └──────────────────┘
+                                        │
+                               ┌────────┴──────────┐
+                               │  Celery Beat       │
+                               │  (scheduled tasks) │
+                               └───────────────────┘
+```
 
-| Quelle      | Modul                                      | Token nötig? |
-| ----------- | ------------------------------------------ | ------------ |
-| `synthetic` | [sample_data.py](backend/app/sample_data.py) | nein (Default) |
-| `gfw`       | [gfw_vessels.py](backend/app/gfw_vessels.py) | ja           |
+### Key design principle
 
-**Welche GFW-API?** Die Schiffs-/AIS-Daten liegen in der **Global Fishing Watch
-API v3** (`gateway.api.globalfishingwatch.org/v3`) — Endpunkte für **Vessels**,
-**Events** (u. a. `gap`/AIS-off und `loitering`) und **4Wings** (Präsenz/Effort).
-Das ist **nicht** die Global *Forest* Watch *Data* API (`gfw_data_api.py`, nur
-Schutzgebiete). [gfw_vessels.py](backend/app/gfw_vessels.py) leitet `ais_gap_hours`
-aus GAP-Events und `loitering_hours` aus LOITERING-Events ab — genau die Felder,
-die die Risk-Regeln speisen.
+The **Risk Engine** depends only on the `Vessel` dataclass — never on a concrete data source. Swap the source adapter; the engine, scoring logic and frontend are untouched.
 
-**Umschalten** — pro Request oder global:
+### Project structure
+
+```text
+mission-radar/
+├── backend/app/
+│   ├── main.py              # FastAPI routes (thin — no business logic)
+│   ├── risk_engine.py       # Vessel dataclass · scoring rules · rank_targets()
+│   ├── geo.py               # Spatial helpers, bbox, MPA intersection
+│   └── transhipment_engine.py
+├── src/spyhop/
+│   ├── analytics/           # Six detection modules (see below)
+│   │   ├── motion_profile.py
+│   │   ├── spatial_risk.py
+│   │   ├── trajectory.py
+│   │   ├── interaction.py
+│   │   ├── spoofing.py
+│   │   └── context_fusion.py
+│   ├── db/
+│   │   ├── models.py        # SQLAlchemy ORM (VesselPosition · VesselTrack · …)
+│   │   └── alembic/         # 7 versioned migrations
+│   ├── worker/
+│   │   ├── celery_app.py
+│   │   ├── tasks.py         # ingest_vessels · score_vessel · sync_blacklists
+│   │   └── ais_stream.py    # live AIS WebSocket consumer
+│   └── api/
+├── frontend-vite/
+│   └── src/                 # 15 ES modules (map · markers · badges · api · …)
+└── docker-compose.yml
+```
+
+---
+
+## 📦 Features
+
+- **Live vessel map** — Leaflet with vessel-type SVG icons, risk-colour coding and animated range rings
+- **Real-time updates** — Server-Sent Events push data changes without client polling
+- **Explainable scoring** — every risk point is backed by a human-readable badge and tooltip
+- **Six analytics dimensions** — motion, spatial, trajectory, V2V encounter, AIS gap / spoofing, contextual fusion
+- **MPA overlay** — protected-area polygons from WDPA / Global Forest Watch, cached 24 h in localStorage
+- **Blacklist cross-reference** — CCAMLR IUU list (18 vessels) + OpenSanctions (1 922 vessels, 15 sources)
+- **Bbox-based geospatial filtering** — PostGIS `ST_MakeEnvelope` + GiST index; "Search this area" button
+- **Skeleton screens** — 200 ms threshold prevents flicker on fast backends
+- **Shared links** — `#bbox=…&start=…&end=…` in the URL; copy and send to a colleague
+- **Dual data source** — switch between synthetic (no token) and Global Fishing Watch (live AIS) per request
+
+---
+
+## 🛠 Tech Stack
+
+| Layer | Technology | Why |
+| :--- | :--- | :--- |
+| **Frontend** | Vite 5 · ES modules · Leaflet | HMR in dev, cache-busted hashes in prod; 15-module split from 2 239-line monolith |
+| **API** | FastAPI · uvicorn · sse-starlette | Async-first; SSE via `EventSourceResponse`; `~2–3 ms` on synthetic source |
+| **Database** | PostgreSQL 16 + PostGIS 3.4 | Spatial queries (`ST_MakeEnvelope`, GiST index on `position`) |
+| **Task queue** | Celery 5 · Redis 7 | Async AIS ingestion, score re-computation, blacklist sync |
+| **Analytics** | Pure Python dataclasses | Deterministic, testable, no ML black box |
+| **Containers** | Docker Compose | Six services; health-check gating, per-service resource limits |
+| **Migrations** | Alembic | 7 versioned migrations, auto-apply on startup |
+
+---
+
+## 🔌 API Reference
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/` | Health check, reports active data source |
+| `GET` | `/api/vessels` | All vessels in bbox with risk scores |
+| `GET` | `/api/vessels/stream` | SSE stream — pushes on fingerprint change |
+| `GET` | `/api/protected-areas` | WDPA MPA polygons for bbox (GeoJSON) |
+
+All `/api/*` endpoints accept `?source=synthetic` (default) or `?source=gfw`, and bbox params `min_lat`, `max_lat`, `min_lon`, `max_lon`.
 
 ```bash
-# pro Request (Query-Parameter)
-curl "http://localhost:8000/api/targets?source=gfw"
+# Fetch vessels in a bbox (Galápagos)
+curl "http://localhost:8000/api/vessels?min_lat=-2&max_lat=1&min_lon=-92&max_lon=-89"
 
-# global per Umgebungsvariable (neuer Default)
-export DATA_SOURCE=gfw
+# Stream live updates
+curl -N "http://localhost:8000/api/vessels/stream?min_lat=-2&max_lat=1&min_lon=-92&max_lon=-89"
 ```
-
-Bei `gfw` wird eine Default-bbox (grob Galápagos) und ein Default-Zeitfenster der
-letzten 48 h verwendet — beides per `GFW_BBOX` / `GFW_LOOKBACK_HOURS` (oder
-`GFW_START`/`GFW_END`) konfigurierbar. Ohne Token läuft alles unverändert im
-synthetischen Default weiter; eine GFW-Anfrage ohne gültigen Token scheitert
-**klar** (HTTP 502 mit Klartext), nie still. Bei Rate-Limit meldet das Modul HTTP
-429 mit `Retry-After`.
-
-### GFW-Token besorgen und setzen
-
-1. Token im GFW-Portal anlegen (Forschungs-/Non-Profit-Zugang) über
-   <https://globalfishingwatch.org/our-apis/tokens>.
-2. `.env` anlegen und Token eintragen — **niemals committen** (`.env` steht in
-   `.gitignore`):
-   ```bash
-   cp .env.example .env
-   # in .env: GFW_API_TOKEN=...
-   ```
-   Der Token wird ausschließlich aus der Umgebungsvariable `GFW_API_TOKEN`
-   gelesen, nie aus dem Code.
-
-> ⚠️ **Vor dem echten Einsatz prüfen:** Endpunkte und Auth in
-> [gfw_vessels.py](backend/app/gfw_vessels.py) sind gegen die offizielle Doku
-> verifiziert (Base-URL, `Bearer`-Auth, `GET /vessels/search`, `GET/POST /events`,
-> Dataset `public-global-fishing-events:latest`). **Nicht** eindeutig aus der Doku
-> ableitbar und daher mit `>>> an echte GFW-Antwort anpassen <<<` markiert: die
-> exakten `type`-Enum-Werte für GAP/LOITERING, die POST-Body-Syntax des
-> Geometrie-Filters und einige Feldpfade im Mapping. Diese gegen eine echte
-> Antwort verifizieren: <https://globalfishingwatch.org/our-apis/documentation>.
-> Fehlende Felder fallen auf konservative Defaults (0.0) zurück.
-> `in_protected_area` kommt **nicht** von GFW, sondern aus
-> [geo.py](backend/app/geo.py).
-
-<!-- -->
-
-> ℹ️ **AIS ist kein perfektes Signal:** AIS-Daten haben **Latenz und Lücken**
-> (Abdeckung, abgeschaltete Transponder, Satelliten-Revisit). Der Risk Score
-> bleibt damit eine **Hypothese**, bis er gegen Ground Truth validiert ist (siehe
-> Abschnitt „Validierung"). Echte Daten machen den Score nicht automatisch wahr —
-> nur überprüfbar.
 
 ---
 
-## Eine neue Regel hinzufügen
+## 🔑 Environment Variables
 
-Das ist bewusst trivial — der ganze Punkt des Designs. In
-[risk_engine.py](backend/app/risk_engine.py):
+Copy `.env.example` to `.env` and fill in your keys. **Never commit `.env`.**
 
-**1.** Funktion `Vessel -> Optional[RiskReason]` schreiben. Eine Begründung ist
-Pflicht (`label` fürs Badge, `detail` für den Tooltip):
+```bash
+cp .env.example .env
+```
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `DATA_SOURCE` | `synthetic` | `synthetic` or `gfw` |
+| `DATABASE_URL` | — | Async PostgreSQL URL (`postgresql+asyncpg://…`) |
+| `REDIS_URL` | — | `redis://redis:6379/0` |
+| `GFW_API_TOKEN` | — | Global Fishing Watch API v3 token — [get one here](https://globalfishingwatch.org/our-apis/tokens) |
+| `GFW_BBOX` | Galápagos | `min_lon,min_lat,max_lon,max_lat` |
+| `GFW_API_KEY` | — | Global *Forest* Watch Data API key (protected areas) |
+| `AISSTREAM_API_KEY` | — | [aisstream.io](https://aisstream.io/authenticate) key for live AIS WebSocket |
+| `VESSEL_CACHE_TTL` | `60` | Vessel cache TTL in seconds |
+| `VESSEL_STREAM_POLL_SECONDS` | `3` | How often the SSE endpoint re-queries the DB |
+
+> **No keys needed for local dev.** With `DATA_SOURCE=synthetic` the backend runs entirely on generated vessel data. A GFW token is only needed if you want live AIS positions over a real ocean region.
+
+---
+
+## ⚖️ Risk Scoring
+
+The scoring system is intentionally **transparent and rule-based** — no black-box ML.
+
+```text
+score = Σ(points for each triggered rule), capped at 100
+```
+
+Every triggered rule produces a badge with a human-readable label and a tooltip detail. Vessels with score 0 (no rules fired) are shown on the map but not ranked.
+
+| Rule | Points | Signal |
+| :--- | ---: | :--- |
+| Inside protected area (MPA) | +35 | Spatial violation |
+| Fishing speed 2–5 kn | +20 | Trawl speed profile |
+| AIS gap ≥ 12 h | +25 | "Going dark" |
+| AIS gap ≥ 4 h | +10 | Moderate gap |
+| Loitering ≥ 6 h | +15 | Possible transshipment |
+| IUU blacklist hit | +40 | CCAMLR / RFMO authoritative list |
+| Sanctions hit | +35 | OpenSanctions (1 922 vessels) |
+| Transshipment pattern | +20 | Rendezvous + AIS dark combo |
+
+**Validation (synthetic approximations of known cases, threshold ≥ 50):**  
+4 / 5 documented IUU vessels correctly flagged (80% TP rate). The one miss — *Fu Yuan Yu Leng 999*, a reefer carrier — exposes a known gap in speed-based rules for non-fishing vessel types. See [VALIDATION_REPORT.txt](VALIDATION_REPORT.txt).
+
+### Adding a rule
 
 ```python
-def rule_high_seas_transshipment(v: Vessel) -> Optional[RiskReason]:
-    """Beispiel: Umladung auf hoher See ist ein bekanntes IUU-Muster."""
-    if v.loitering_hours >= 6 and v.ais_gap_hours >= 4:
+# risk_engine.py — one function, one list append, nothing else changes
+def rule_flag_of_convenience(v: Vessel) -> Optional[RiskReason]:
+    if v.flag in HIGH_RISK_FLAGS and v.ais_gap_hours >= 4:
         return RiskReason(
-            points=20,
-            label="Transshipment-Verdacht",
-            detail="Langes Verweilen kombiniert mit AIS-Lücke deutet auf eine "
-                   "Umladung auf hoher See hin.",
+            points=15,
+            label="Flag of convenience + gap",
+            detail="Open registry flag combined with AIS blackout.",
         )
     return None
+
+RULES = [..., rule_flag_of_convenience]  # that's it
 ```
-
-**2.** Die Funktion an die `RULES`-Liste anhängen:
-
-```python
-RULES: List[Rule] = [
-    rule_protected_area,
-    rule_fishing_speed,
-    rule_ais_gap,
-    rule_loitering,
-    rule_high_seas_transshipment,   # <- neu
-]
-```
-
-Fertig. **Kein anderer Code wird angefasst.** Die Engine, die API und das Frontend
-übernehmen die neue Regel automatisch (inkl. Badge im UI).
-
-### Startregeln (Phase 1)
-
-| Regel                          | Punkte | Begründung                                  |
-| ------------------------------ | ------ | ------------------------------------------- |
-| Im Schutzgebiet                | +35    | Aufenthalt in einem MPA                     |
-| Fischerei-Tempo (2–5 kn)       | +20    | typische Schleppnetz-Geschwindigkeit        |
-| AIS-Lücke ≥ 12 h               | +25    | „going dark", Verschleierung                |
-| AIS-Lücke ≥ 4 h                | +10    | moderate Lücke, beobachtenswert             |
-| Verweilen (Loitering) ≥ 6 h    | +15    | Fang/Umladen statt Transit                  |
-
-Score = Summe aller zutreffenden Begründungen, **gedeckelt bei 100**. Schiffe ohne
-eine einzige Begründung erscheinen nicht in der Ziel-Liste.
 
 ---
 
-## Schutzgebiete (`in_protected_area`)
+## 🧠 Analytics Modules
 
-Das Flag `in_protected_area` wird **geometrisch berechnet**, nicht hartkodiert:
-[geo.py](backend/app/geo.py) lädt die Schutzgebiets-Polygone aus
-[backend/data/protected_areas.geojson](backend/data/protected_areas.geojson)
-(einmalig, Modul-Level-Cache) und prüft mit shapely, ob die Schiffsposition darin
-liegt. Diese Geo-Logik ist bewusst von der Risk Engine getrennt — die Engine
-bekommt nur den fertigen Boolean und weiß nichts über Geometrie.
+Six independent detectors run on the `vessel_tracks` sliding window and write results back to `vessel_positions`:
 
-> ⚠️ Die mitgelieferte GeoJSON ist **nur ein Platzhalter** mit erfundenen Polygonen,
-> die zur synthetischen Testszene passen. Sie hat keinerlei reale Bedeutung.
+| Module | What it computes |
+| :--- | :--- |
+| `motion_profile` | Behaviour classification: `transit / trawling / loitering / anchored` + confidence |
+| `spatial_risk` | Distance to nearest MPA boundary, time-in-zone, border-skirting flag |
+| `trajectory` | Route geometry pattern: `grid / holding / spiral / transit / anomaly` |
+| `interaction` | V2V encounter detection: partner vessel type, meeting class |
+| `spoofing` | AIS gap kinematic analysis: implied speed violations, spoofing flag |
+| `context_fusion` | Environmental overlay: SST, wave height, wind speed from CMEMS rasters |
 
-**Echte Daten:** Die maßgebliche Quelle für Meeresschutzgebiete ist die
-**World Database on Protected Areas (WDPA)**, bereitgestellt über
-**Protected Planet** — <https://www.protectedplanet.net>. Für den echten Einsatz
-wird `protected_areas.geojson` durch einen WDPA-Export der relevanten Gebiete
-ersetzt; an `geo.py` und der Engine ändert sich dabei nichts.
-
-### Variante: WDPA live über die Global Forest Watch Data API
-
-Statt eines lokalen GeoJSON-Exports kann WDPA auch live abgefragt werden — über die
-**Global Forest Watch *Data* API** (`gfw-data-api`, v0.3.0). Das Modul
-[gfw_data_api.py](backend/app/gfw_data_api.py) kapselt das:
-`is_in_protected_area(lat, lon)` schickt ein Punkt-in-Polygon-SQL an
-`GET /dataset/{dataset}/{version}/query/json`.
-
-**Key besorgen** (laut Spec):
-
-1. `POST /auth/sign-up` (Name, E-Mail) → bestätigt deinen Zugang.
-2. `POST /auth/apikey` mit `alias`, `organization`, `email` und optional `domains`
-   (die Allowlist erlaubter `origin`-Werte).
-
-**Variablen setzen** (in `.env`, niemals committen):
-
-```bash
-GFW_API_KEY=...            # API-Key (Header/Query "x-api-key")
-GFW_API_ORIGIN=http://localhost   # muss zur domains-Allowlist des Keys passen
-```
-
-**Dataset finden — nicht raten:** Den exakten WDPA-Dataset-Namen und die Version
-kennt die Spec nicht. Liste die Datasets selbst auf und trage die Werte in
-`WDPA_DATASET` / `WDPA_VERSION` (oben in `gfw_data_api.py`, mit
-`>>> an echtes WDPA-Dataset anpassen <<<` markiert) ein:
-
-```python
-from app.gfw_data_api import list_datasets
-for d in list_datasets():
-    print(d.get("dataset"))   # nach dem WDPA-Eintrag suchen
-```
-
-> ⚠️ **Namensverwechslung — wichtig:** „GFW Data API" = **Global *Forest* Watch**
-> (Wald, Raster, Vektor, Schutzgebiete). Sie liefert **keine** Schiffspositionen.
+Each module is a pure function over the `Vessel` dataclass — deterministic, independently testable, no shared state.
 
 ---
 
-## Schiffsdaten (AIS) — getrennte Quelle nötig
+## 🗂 Data Sources
 
-Die oben genannte Global **Forest** Watch Data API hat keinerlei Schiffs-,
-AIS- oder Fishing-Effort-Endpunkte (alle 51 Pfade der Spec geprüft). **Schiffs­bewegungen
-brauchen daher eine eigene, getrennte Datenquelle.** Mission Radar trennt das sauber:
+| Source | Licence | Status |
+| :--- | :--- | :--- |
+| AIS via [Global Fishing Watch API v3](https://globalfishingwatch.org/our-apis/) | GFW ToS | ✅ live (with token) |
+| WDPA protected areas via [Global Forest Watch Data API](https://data-api.globalforestwatch.org/) | CC-BY | ✅ live (with key) |
+| CCAMLR IUU blacklist | Official (18 vessels) | ✅ bundled |
+| OpenSanctions vessels | CC-BY-NC 4.0 (1 922 vessels, 15 sources) | ✅ bundled |
+| Live AIS via [aisstream.io](https://aisstream.io/) | ToS | ✅ streaming (with key) |
+| Synthetic data | — | ✅ built-in default |
 
-| Frage | Quelle | Modul |
-| ----- | ------ | ----- |
-| Wo liegen Schutzgebiete? | WDPA (lokal **oder** GFW *Data* API) | [geo.py](backend/app/geo.py) / [gfw_data_api.py](backend/app/gfw_data_api.py) |
-| Wo sind welche Schiffe? | AIS / Global *Fishing* Watch | [gfw_client.py](backend/app/gfw_client.py) |
-
-Für echte Schiffsdaten kommen z. B. in Frage:
-
-- **Global *Fishing* Watch APIs** (apparent fishing effort, Vessel/Events) —
-  <https://globalfishingwatch.org/our-apis/documentation> — eine **andere** API als
-  die Forest-Watch-Data-API.
-- ein kommerzieller **AIS-Provider** (z. B. Satelliten-AIS).
-
-Die Risk Engine bleibt von all dem unberührt: Beide Welten liefern am Ende fertige
-`Vessel`-Objekte (inkl. des bereits berechneten `in_protected_area`-Flags).
+> **Zone A only.** Corporate ownership (OpenCorporates, ICIJ, OCCRP) and personal data sources are deliberately excluded. They belong behind a human-led analyst workspace (Zone B). See [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ---
 
-## ⚠️ Validierung — ehrlich gesagt
+## 📄 License
 
-**Die Score-Gewichte sind geschätzt, nicht gemessen.** Sie beruhen auf Plausibilität
-und gängigem Domänenwissen über IUU-Muster — nicht auf einer Auswertung echter Fälle.
-In der jetzigen Form ist Mission Radar ein **Demonstrator / Prototyp**, kein
-einsatzreifes Werkzeug. Bevor dieses System reale Entscheidungen stützt, braucht es:
-
-1. **Echte AIS-Daten** statt synthetischer Szenen — z. B. über die
-   [Global Fishing Watch API](https://globalfishingwatch.org/our-apis/). Das ist
-   genau der Phase-2-Schritt, für den die Datenquelle austauschbar gebaut ist.
-2. **Ground Truth:** ein Datensatz bekannter, bestätigter IUU-Fälle (und bestätigter
-   Negativfälle) als Maßstab. Ohne bekannte Wahrheit lässt sich kein Gewicht
-   rechtfertigen.
-3. **Fehlerraten-Analyse:** False-Positive- und False-Negative-Raten messen. Ein
-   Decision-Support-System, das legitime Fischer fälschlich verdächtigt, richtet
-   realen Schaden an — das muss quantifiziert und akzeptabel sein.
-4. **Kalibrierung der Gewichte** gegen diese Ground Truth (statt sie zu raten),
-   idealerweise mit Sensitivitätsanalyse: Wie stark hängt das Ranking an einzelnen
-   Gewichten?
-5. **Domänen-Review:** Die Regeln und Schwellen gehören von Menschen mit
-   Fischerei-/Enforcement-Erfahrung geprüft.
-
-Bis dahin gilt: Die Begründungen sind belastbarer als die Zahlen. Mission Radar
-**priorisiert Aufmerksamkeit** und macht seine Annahmen transparent — es trifft
-keine Schuldfeststellung.
-
----
-
-## Validierung gegen bekannte IUU-Fälle
-
-Ein erster, ehrlicher Qualitätsschritt: Hätte die Engine reale, dokumentierte
-IUU-Fälle hoch bewertet? Das Validierungs-Framework liegt **getrennt** von der
-Engine in [backend/validation/](backend/validation/) — es ruft die Engine nur auf,
-ändert sie nie.
-
-```bash
-cd backend
-.venv/bin/python -m validation.validate_scores
-```
-
-**Was passiert:** Bekannte Fälle aus
-[known_cases.py](backend/validation/known_cases.py) (Thunder, Viking, Kunlun,
-STS-50, Fu Yuan Yu Leng 999 + eine konstruierte Negativkontrolle) laufen durch
-`rank_targets()`. Das Skript zeigt pro Fall Score, angeschlagene Regeln und die
-Klassifikation (TP/FN/FP/TN) und am Ende eine ehrliche Auswertung mit
-True-Positive-Rate, Schwächen und Empfehlungen.
-
-**Aktuelles Ergebnis (Schwelle Score ≥ 50):**
-
-| Kennzahl | Wert |
-| --- | --- |
-| Bekannte IUU-Fälle | 5 |
-| Korrekt erkannt (TP) | 4 → **TP-Rate 80 %** |
-| Nicht erkannt (FN) | 1 — *Fu Yuan Yu Leng 999* |
-| Negativkontrolle | TN=1, FP=0 |
-
-**Was die Ergebnisse bedeuten:** Die vier aktiv fischenden Poacher (AIS aus,
-Fischerei-Tempo, im Sperrgebiet, Verweilen) werden klar erkannt. Der **Reefer**
-*Fu Yuan Yu Leng 999* — 2017 mit ~6.600 Haien im Galápagos-Reservat gestellt —
-rutscht durch: Er fischte nicht aktiv (kein Fischerei-Tempo) und hatte AIS an,
-also greift nur die Schutzgebiets-Regel (+35). Das ist eine **echte, bewusst
-gezeigte Schwäche** regelbasierter Speed-/Gap-Logik, kein Zufall.
-
-> ⚠️ **Ehrlich:** Die Eingabewerte sind **synthetische Approximationen**
-> dokumentierten Verhaltens, **keine** echten AIS-Traces. Jeder Fall trägt eine
-> Quelle und ist als `approx` markiert. Eine kleine, handverlesene Fallzahl ist
-> **keine** statistische Validierung.
-
-**Nächste Schritte zur echten Validierung:**
-
-1. **Echte AIS-Traces** der bekannten Fälle über den GFW-Token ziehen (Position,
-   Speed, Gaps zum Tatzeitpunkt) statt sie zu schätzen.
-2. **Größerer, unabhängig gelabelter Datensatz** mit Positiv- *und* Negativfällen
-   (z. B. CCAMLR/Interpol-Listen vs. verifiziert legale Fahrzeuge).
-3. **Schwelle und Gewichte kalibrieren** statt zu raten; Fehlerraten quantifizieren.
-4. **Neue Regeln** für die gefundenen Lücken (Transshipment/Encounter,
-   Identitäts-/Flaggenwechsel, Watchlist-Abgleich) — über die `RULES`-Liste,
-   ohne die Engine umzubauen.
+MIT — see [LICENSE](LICENSE). Data sources carry their own licences; see the table above.
