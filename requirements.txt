@@ -8,9 +8,11 @@ fastapi[standard]==0.115.6
 uvicorn[standard]==0.32.1
 uvloop==0.21.0
 httptools==0.6.4
+sse-starlette==2.2.1
 
 # --- Async HTTP client (for tasks that call external APIs) -------------------
 httpx==0.28.1
+websockets==16.0
 
 # --- Database (async + sync) -------------------------------------------------
 sqlalchemy[asyncio]==2.0.36
