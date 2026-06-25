@@ -16,6 +16,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from spyhop.api.routes import health, vessels, websocket
+from spyhop.api.routes import h3 as h3_routes
+from spyhop.api.routes import detail as detail_routes
 from spyhop.cache.redis_client import close_pool, wait_for_redis
 from spyhop.config import get_settings
 from spyhop.db.engine import wait_for_db
@@ -49,11 +51,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 def _warmup_rule_indices() -> None:
     """Pre-load IUU/sanctions/EEZ indices so first requests are cache-hits."""
     try:
-        from backend.app.sources import eez, iuu_list, opensanctions, port_control
+        from backend.app.sources import (  # noqa: PLC0415
+            eez, iuu_list, opensanctions, port_control,
+        )
         for mod in (iuu_list, opensanctions, port_control, eez):
             try:
                 mod.warmup()
-                log.info("warmup.ok", source=getattr(mod, "SOURCE", mod.__name__))
+                src = getattr(mod, "SOURCE", mod.__name__)
+                log.info("warmup.ok", source=src)
             except Exception as exc:  # noqa: BLE001
                 log.warning(
                     "warmup.failed",
@@ -91,4 +96,6 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(vessels.router)
+app.include_router(h3_routes.router)
+app.include_router(detail_routes.router)
 app.include_router(websocket.router)

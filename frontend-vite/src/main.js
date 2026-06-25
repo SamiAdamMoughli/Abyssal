@@ -4,10 +4,12 @@ import L from 'leaflet';
 
 import { state } from './state.js';
 import { fmtDate } from './utils.js';
-import { setupOnboarding, hideOnboarding } from './onboarding.js';
 import { loadData, currentDates } from './api.js';
 import { renderCards } from './ui.js';
 import { getVisibleVessels } from './vessels.js';
+import {
+  renderHexGrid, clearHexGrid, loadFromHexSelection, hasSelection,
+} from './h3grid.js';
 
 // ==================================================================
 // MAP INIT
@@ -21,6 +23,7 @@ state.mpaLayer    = L.layerGroup().addTo(state.map);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
   attribution: '&copy; OpenStreetMap &copy; CARTO',
   maxZoom: 19,
+  crossOrigin: '',
 }).addTo(state.map);
 
 // Loading overlay (created dynamically so the HTML stays clean)
@@ -70,6 +73,34 @@ function searchThisArea() {
 document.getElementById('search-btn').addEventListener('click', searchThisArea);
 
 // ==================================================================
+// HEX GRID MODE
+// ==================================================================
+let _hexModeActive = false;
+
+function setHexMode(active) {
+  _hexModeActive = active;
+  const hexBtn    = document.getElementById('hex-mode-btn');
+  const searchBtn = document.getElementById('hex-search-btn');
+  const normalBtn = document.getElementById('search-btn');
+  hexBtn.classList.toggle('active', active);
+  searchBtn.style.display = active ? 'inline-flex' : 'none';
+  normalBtn.style.display = active ? 'none' : 'inline-flex';
+  if (active) {
+    renderHexGrid();
+  } else {
+    clearHexGrid();
+  }
+}
+
+document.getElementById('hex-mode-btn')
+  .addEventListener('click', () => setHexMode(!_hexModeActive));
+
+document.getElementById('hex-search-btn')
+  .addEventListener('click', () => {
+    if (hasSelection()) loadFromHexSelection();
+  });
+
+// ==================================================================
 // SIDEBAR CONTROLS
 // ==================================================================
 document.getElementById('search-input').addEventListener('input', e => {
@@ -104,27 +135,29 @@ document.getElementById('cat-filters').addEventListener('click', e => {
 // MAP MOVE — show "Search this area" button + area warning
 // ==================================================================
 function maybeShowButton() {
-  if (state.ready) document.getElementById('search-btn').classList.add('show');
+  if (state.ready && !_hexModeActive)
+    document.getElementById('search-btn').classList.add('show');
 }
 function updateAreaWarning() {
   const b    = state.map.getBounds();
   const span = Math.max(b.getNorth() - b.getSouth(), b.getEast() - b.getWest());
   document.getElementById('area-warn').style.display = span > 15 ? 'block' : 'none';
 }
-state.map.on('moveend', () => { maybeShowButton(); updateAreaWarning(); });
+state.map.on('moveend', () => {
+  maybeShowButton();
+  updateAreaWarning();
+  if (_hexModeActive) renderHexGrid();
+});
 
 // ==================================================================
-// ONBOARDING + SHARED LINK HANDLING
+// STARTUP — skip onboarding, boot straight into hex mode
 // ==================================================================
-setupOnboarding();
-
-const h = new URLSearchParams(location.hash.slice(1));
-if (h.get('bbox')) {
-  const [minLon, minLat, maxLon, maxLat] = h.get('bbox').split(',').map(Number);
-  if (h.get('start')) document.getElementById('date-from').value = h.get('start');
-  if (h.get('end'))   document.getElementById('date-to').value   = h.get('end');
-  state.map.fitBounds([[minLat, minLon], [maxLat, maxLon]]);
-  hideOnboarding();
-  loadData({ min_lat: minLat, max_lat: maxLat, min_lon: minLon, max_lon: maxLon,
-    start: h.get('start'), end: h.get('end') }).then(() => { state.ready = true; });
-}
+(async () => {
+  const b = state.map.getBounds();
+  await loadData({
+    min_lat: b.getSouth(), max_lat: b.getNorth(),
+    min_lon: b.getWest(),  max_lon: b.getEast(),
+  });
+  state.ready = true;
+  setHexMode(true);
+})();

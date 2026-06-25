@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     AISSTREAM_BBOX: str = ""          # overrides GFW_BBOX when set
     AISSTREAM_FLUSH_INTERVAL: int = 10  # seconds between PostGIS flushes
 
+    # --- SSE stream ----------------------------------------------------------
+    VESSEL_STREAM_POLL_SECONDS: float = 3.0
+
     # --- Protected-area source -----------------------------------------------
     PROTECTED_AREA_SOURCE: str = "gfw"
 

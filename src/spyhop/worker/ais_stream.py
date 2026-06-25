@@ -365,6 +365,39 @@ class AISConsumer:
         score_map = {a.vessel.mmsi: a.score for a in assessments}
         _pipeline_update_scores(score_map)
 
+        # --- Redis H3 live layer + enrichment queue -------------------------
+        # Write every vessel into its current H3 cell hash so FastAPI can
+        # serve real-time positions without hitting PostGIS.
+        # Also queue any MMSI whose enriched profile doesn't exist yet.
+        try:
+            import h3 as _h3
+            pipe = _sync_redis.pipeline(transaction=False)
+            known_keys = _sync_redis.mget([
+                f"identity:{a.vessel.mmsi}" for a in assessments
+            ])
+            for a, cached in zip(assessments, known_keys):
+                v = a.vessel
+                cell = _h3.latlng_to_cell(v.lat, v.lon, 7)
+                blob = ujson.dumps({
+                    "mmsi": v.mmsi,
+                    "name": v.name,
+                    "lat": v.lat,
+                    "lon": v.lon,
+                    "risk_score": a.score,
+                    "vessel_type": v.vessel_type,
+                    "flag": v.flag,
+                    "speed_knots": v.speed_knots,
+                    "in_protected_area": v.in_protected_area,
+                    "h3_index": cell,
+                })
+                pipe.hset(f"h3:{cell}", v.mmsi, blob)
+                pipe.expire(f"h3:{cell}", 300)  # 5-min TTL — stale if moves
+                if not cached:
+                    pipe.rpush("enrich:queue", v.mmsi)
+            pipe.execute()
+        except Exception as exc:
+            log.warning("ais_stream.h3_redis_error", error=str(exc))
+
         payload = [
             {
                 "mmsi": a.vessel.mmsi,

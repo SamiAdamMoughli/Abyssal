@@ -18,6 +18,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import h3
 import redis as sync_redis_lib
 import ujson
 from celery.utils.log import get_task_logger
@@ -100,7 +101,9 @@ def fetch_and_score_vessels(self: Any) -> dict[str, Any]:
     t_start = time.monotonic()
     try:
         if settings.DATA_SOURCE == "gfw":
-            from backend.app.gfw_vessels import GfwVesselSource  # noqa: PLC0415,E402
+            from backend.app.gfw_vessels import (  # noqa: PLC0415
+                GfwVesselSource,
+            )
             source = GfwVesselSource()
         else:
             from backend.app.sample_data import get_source  # noqa: PLC0415
@@ -372,6 +375,7 @@ def _build_vessel_rows(assessments: list) -> list[dict[str, Any]]:
             "sst_at_thermal_front": v.sst_at_thermal_front,
             "historical_risk_score": v.historical_risk_score,
             "verified_vessel_type": v.verified_vessel_type,
+            "h3_index": h3.latlng_to_cell(v.lat, v.lon, 7),
             "risk_score": ta.score,
             "top_reason_label": (
                 ta.top_reason.label if ta.top_reason else None
@@ -789,7 +793,6 @@ def _detect_proximity_sync(
     from datetime import timezone as tz
     from spyhop.analytics.interaction import (  # noqa: PLC0415
         InteractionResult,
-        MeetingClass,
         classify_pair,
     )
 
@@ -904,7 +907,7 @@ def sync_environment_raster() -> dict[str, Any]:
       - Wind speed: 5-35 kn, higher in westerly storm belts
     The real API integration is a drop-in replacement for the generation block.
     """
-    import math as _math  # noqa: PLC0415
+    import math  # noqa: PLC0415,F401
     import random as _rnd  # noqa: PLC0415
     from geoalchemy2.shape import from_shape  # noqa: PLC0415
     from shapely.geometry import Point  # noqa: PLC0415
@@ -972,7 +975,6 @@ def _compute_environmental_sync(
     """
     from spyhop.analytics.context_fusion import (  # noqa: PLC0415
         EnvironmentalContext, detect_sst_front,
-        SST_NO_DATA, WAVE_NO_DATA, WIND_NO_DATA,
     )
 
     if not vessels:
@@ -1105,3 +1107,106 @@ def _enrich_vessel_profiles_sync(
             )
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Task: compute_h3_context  (every 6 hours)
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(
+    name="spyhop.worker.tasks.compute_h3_context",
+    soft_time_limit=600,
+    time_limit=720,
+)
+def compute_h3_context() -> dict[str, Any]:
+    """Pre-bake environmental + biological context for active H3 cells.
+
+    Queries Open-Meteo (marine conditions) and OBIS (species presence) for
+    every H3 cell that currently has vessels in PostGIS, then stores the
+    fused context in Redis under h3:context:{cell_id} with a 12-hour TTL.
+    """
+    import asyncio
+
+    log.info("compute_h3_context.start")
+
+    with SyncSession() as session:
+        rows = session.execute(
+            text(
+                "SELECT DISTINCT h3_index, "
+                "ST_X(position) AS lon, ST_Y(position) AS lat "
+                "FROM vessel_positions "
+                "WHERE h3_index IS NOT NULL"
+            )
+        ).fetchall()
+
+    if not rows:
+        log.info("compute_h3_context.no_cells")
+        return {"status": "ok", "cells": 0}
+
+    cell_ids = [r.h3_index for r in rows]
+    cell_centres = {r.h3_index: (r.lat, r.lon) for r in rows}
+
+    # Mark cells inside protected areas
+    protected_flags: dict[str, str | None] = {}
+    try:
+        from backend.app.geo import is_in_protected_area
+        for cell_id, (lat, lon) in cell_centres.items():
+            protected_flags[cell_id] = (
+                "Marine Protected Area"
+                if is_in_protected_area(lat, lon) else None
+            )
+    except Exception as exc:
+        log.warning("compute_h3_context.mpa_error: %s", exc)
+        protected_flags = {cid: None for cid in cell_ids}
+
+    from spyhop.enrichment.openmeteo import fetch_marine_conditions
+    from spyhop.enrichment.obis import fetch_species_presence
+
+    async def _gather():
+        weather, species = await asyncio.gather(
+            fetch_marine_conditions(cell_ids),
+            fetch_species_presence(cell_ids),
+            return_exceptions=True,
+        )
+        return (
+            weather if isinstance(weather, dict) else {},
+            species if isinstance(species, dict) else {},
+        )
+
+    weather_map, species_map = asyncio.run(_gather())
+
+    pipe = _sync_redis.pipeline(transaction=False)
+    for cell_id in cell_ids:
+        w = weather_map.get(cell_id, {})
+        s = species_map.get(cell_id, {})
+        protected = protected_flags.get(cell_id)
+
+        context = {
+            "wave_height_m": w.get("wave_height_m"),
+            "wave_period_s": w.get("wave_period_s"),
+            "current_velocity_ms": w.get("current_velocity_ms"),
+            "sea_surface_temp_c": w.get("sea_surface_temp_c"),
+            "cetaceans": s.get("cetaceans", []),
+            "sea_turtles": s.get("sea_turtles", []),
+            "sharks_rays": s.get("sharks_rays", []),
+            "threatened_species": s.get("threatened_species", []),
+            "total_species": s.get("total_species", 0),
+            "bio_risk": s.get("bio_risk", "none"),
+            "protected_zone": protected,
+            "is_sanctuary": protected is not None,
+        }
+        pipe.setex(
+            f"h3:context:{cell_id}",
+            43_200,     # 12-hour TTL
+            ujson.dumps(context),
+        )
+
+    pipe.execute()
+    n_weather = sum(1 for w in weather_map.values() if w)
+    n_species = sum(1 for s in species_map.values() if s)
+    log.info(
+        "compute_h3_context.done cells=%d weather=%d species=%d",
+        len(cell_ids), n_weather, n_species,
+    )
+    return {"status": "ok", "cells": len(cell_ids)}

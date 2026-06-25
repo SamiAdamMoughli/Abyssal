@@ -161,6 +161,50 @@ services:
       - spyhop_net
 
   # ---------------------------------------------------------------------------
+  # AIS Stream Worker  (Worker 1 — live WebSocket ingestion)
+  # ---------------------------------------------------------------------------
+  ais_stream:
+    <<: *app-base
+    container_name: spyhop_ais_stream
+    command: python -m spyhop.worker.ais_stream
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "256M"
+    networks:
+      - spyhop_net
+    profiles:
+      - live   # only starts with: docker compose --profile live up
+
+  # ---------------------------------------------------------------------------
+  # Enrichment Manager  (Worker 2 — throttled API fallback chain)
+  # ---------------------------------------------------------------------------
+  enrichment_manager:
+    <<: *app-base
+    container_name: spyhop_enrichment
+    command: python -m spyhop.worker.enrichment_manager
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: "128M"
+    networks:
+      - spyhop_net
+    profiles:
+      - live   # only starts with: docker compose --profile live up
+
+  # ---------------------------------------------------------------------------
   # Flower  (Celery monitoring UI at :5555)
   # ---------------------------------------------------------------------------
   flower:

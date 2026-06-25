@@ -90,6 +90,13 @@ class RedisClient:
         except RedisError as exc:
             log.warning("redis.set.failed", key=key, error=str(exc))
 
+    async def mget(self, keys: list[str]) -> list[Optional[str]]:
+        try:
+            return await self._redis.mget(keys)
+        except RedisError as exc:
+            log.warning("redis.mget.failed", count=len(keys), error=str(exc))
+            return [None] * len(keys)
+
     async def delete(self, *keys: str) -> None:
         try:
             await self._redis.delete(*keys)

@@ -55,6 +55,43 @@ class VesselRepository:
         result = await self.session.execute(stmt)
         return result.scalars().all()
 
+    async def get_vessels_by_h3(
+        self,
+        h3_ids: list[str],
+    ) -> Sequence[VesselPosition]:
+        """Vessels whose h3_index is in the given set of H3 cell IDs.
+
+        Uses the B-tree index on h3_index — sub-millisecond even with thousands
+        of cells in the IN list.
+        """
+        if not h3_ids:
+            return []
+        stmt = select(VesselPosition).where(
+            VesselPosition.h3_index.in_(h3_ids)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
+    async def get_h3_vessel_counts(
+        self,
+        h3_ids: list[str],
+    ) -> dict[str, int]:
+        """Return {h3_index: vessel_count} for the requested cells.
+
+        Used by the frontend grid layer to colour-code hexagons by density.
+        """
+        if not h3_ids:
+            return {}
+        from sqlalchemy import Integer, case, func as sqlfunc
+
+        stmt = (
+            select(VesselPosition.h3_index, sqlfunc.count().label("n"))
+            .where(VesselPosition.h3_index.in_(h3_ids))
+            .group_by(VesselPosition.h3_index)
+        )
+        result = await self.session.execute(stmt)
+        return {row.h3_index: row.n for row in result}
+
     async def get_vessels_near_point(
         self,
         lat: float,

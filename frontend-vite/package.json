@@ -8,6 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "h3-js": "^4.4.0",
     "leaflet": "^1.9.4"
   },
   "devDependencies": {

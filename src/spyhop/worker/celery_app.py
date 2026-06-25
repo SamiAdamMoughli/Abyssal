@@ -74,5 +74,10 @@ celery_app.conf.update(
             "schedule": crontab(minute=5),   # :05 past every hour
             "options": {"queue": "sync"},
         },
+        "compute-h3-context-every-6h": {
+            "task": "spyhop.worker.tasks.compute_h3_context",
+            "schedule": crontab(minute=30, hour="*/6"),
+            "options": {"queue": "sync"},
+        },
     },
 )

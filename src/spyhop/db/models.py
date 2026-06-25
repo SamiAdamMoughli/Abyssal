@@ -125,6 +125,11 @@ class VesselPosition(Base):
     historical_risk_score: Mapped[float] = mapped_column(Float, default=-1.0)
     verified_vessel_type: Mapped[str] = mapped_column(String(50), default="")
 
+    # --- H3 spatial index (resolution 7, ~5 km² per cell) -------------------
+    h3_index: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True, index=True
+    )
+
     # --- Risk output ---------------------------------------------------------
     risk_score: Mapped[float] = mapped_column(Float, default=0.0)
     top_reason_label: Mapped[Optional[str]] = mapped_column(
@@ -192,6 +197,7 @@ class VesselPosition(Base):
             "sst_at_thermal_front": self.sst_at_thermal_front,
             "historical_risk_score": self.historical_risk_score,
             "verified_vessel_type": self.verified_vessel_type,
+            "h3_index": self.h3_index,
             "risk_score": self.risk_score,
             "top_reason_label": self.top_reason_label,
             "reasons": reasons,

@@ -2,7 +2,7 @@ import L from 'leaflet';
 import { state } from './state.js';
 import { css, riskClass } from './utils.js';
 import { getVesselSvgIcon } from './icons.js';
-import { popupHtml } from './popup.js';
+import { openDetail } from './detail.js';
 
 function radiusFor(v) {
   const c = riskClass(v.risk_score);
@@ -18,7 +18,7 @@ function gapCircleRadius(v) {
 
 export function createMarkerForVessel(v) {
   const marker = L.marker([v.lat, v.lon], { icon: getVesselSvgIcon(v) });
-  marker.bindPopup(popupHtml(v), { maxWidth: 300 });
+  marker.on('click', () => openDetail(v.mmsi));
   let ring = null;
   let gapCircle = null;
   if (v.in_protected_area) {
@@ -41,7 +41,7 @@ export function createMarkerForVessel(v) {
 export function updateMarkerForVessel(v, entry) {
   entry.marker.setLatLng([v.lat, v.lon]);
   entry.marker.setIcon(getVesselSvgIcon(v));
-  entry.marker.bindPopup(popupHtml(v), { maxWidth: 300 });
+  entry.marker.off('click').on('click', () => openDetail(v.mmsi));
 
   if (v.in_protected_area) {
     if (entry.ring) {
