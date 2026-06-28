@@ -1,10 +1,11 @@
 /**
- * Map overlay layers: vessel heatmap, EEZ risk, and weather.
+ * Map overlay layers: vessel heatmap, EEZ risk, weather, and corridors.
  * All overlays are optional and degrade gracefully when data is unavailable.
  */
 
 import "leaflet.heat";
 import { state } from "./state.js";
+export { toggleCorridors, toggleDarkGaps } from "./corridors.js";
 
 const ANALYTICS_URL =
   window.__ENV?.ANALYTICS_URL ?? "http://localhost:8001";

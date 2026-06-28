@@ -68,6 +68,16 @@ class Settings(BaseSettings):
     # --- Protected-area source -----------------------------------------------
     PROTECTED_AREA_SOURCE: str = "gfw"
 
+    # --- ML pipeline ---------------------------------------------------------
+    MODEL_ARTIFACTS_PATH: str = "/app/model_artifacts"
+    # skip training below this row count
+    ML_MIN_TRAIN_SAMPLES: int = 50
+    # minimum R² to auto-promote risk scorer
+    ML_PROMOTE_MIN_R2: float = 0.20
+    # PSI thresholds for drift monitoring
+    ML_DRIFT_PSI_WARN: float = 0.10
+    ML_DRIFT_PSI_CRITICAL: float = 0.20
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

@@ -2,10 +2,18 @@
 
 Beat tasks:
   fetch_and_score_vessels        — every 5 minutes (real-time vessel tracking)
-  sync_iuu_list                  — daily at 02:00 UTC (CCAMLR/RFMO/TMT list refresh)
-  sync_sanctions                 — daily at 03:00 UTC (OpenSanctions bulk refresh)
-  sync_environment_raster        — hourly at :05 UTC (SST / wave / wind grid refresh)
-  brain.evaluate_spatialized_batch — every 30 s (rule evaluation from telemetry stream)
+  sync_iuu_list                  — daily at 02:00 UTC
+  sync_sanctions                 — daily at 03:00 UTC
+  sync_environment_raster        — hourly at :05 UTC
+  brain.evaluate_spatialized_batch — every 30 s (rule evaluation)
+  train_risk_model               — Sunday 04:00 UTC (ML retraining)
+  train_behavior_model           — Sunday 04:30 UTC (ML retraining)
+  promote_shadow_model           — Monday 05:00 UTC (auto-promote if better)
+  monitor_score_drift            — every 6 h at :45 (PSI drift check)
+  prune_prediction_log           — daily 01:30 UTC (log housekeeping)
+  snapshot_vessel_positions      — hourly at :50 UTC (corridor accumulation)
+  materialize_h3_corridors       — Sunday 01:00 UTC (weekly corridor rollup)
+  prune_vessel_snapshots         — daily 00:30 UTC (90-day retention)
 """
 
 from __future__ import annotations
@@ -23,6 +31,7 @@ celery_app = Celery(
     backend=settings.CELERY_RESULT_BACKEND,
     include=[
         "spyhop.worker.tasks",
+        "spyhop.worker.ml_tasks",
         "vesselx.brain.tasks",
     ],
 )
@@ -42,6 +51,20 @@ celery_app.conf.update(
         "spyhop.worker.tasks.sync_iuu_list": {"queue": "sync"},
         "spyhop.worker.tasks.sync_sanctions": {"queue": "sync"},
         "spyhop.worker.tasks.sync_environment_raster": {"queue": "sync"},
+        "spyhop.worker.tasks.compute_h3_context": {"queue": "sync"},
+        "spyhop.worker.tasks.prune_vessel_tracks": {"queue": "sync"},
+        "spyhop.worker.tasks.snapshot_vessel_positions": {"queue": "sync"},
+        "spyhop.worker.tasks.materialize_h3_corridors": {"queue": "sync"},
+        "spyhop.worker.tasks.prune_vessel_snapshots": {"queue": "sync"},
+        # Brain evaluation — isolated queue to prevent starvation
+        "brain.evaluate_spatialized_batch": {"queue": "brain"},
+        "brain.evaluate_vessel_by_mmsi": {"queue": "brain"},
+        # ML pipeline — isolated so long training never delays live tasks
+        "spyhop.worker.ml_tasks.train_risk_model": {"queue": "ml"},
+        "spyhop.worker.ml_tasks.train_behavior_model": {"queue": "ml"},
+        "spyhop.worker.ml_tasks.promote_shadow_model": {"queue": "ml"},
+        "spyhop.worker.ml_tasks.monitor_score_drift": {"queue": "ml"},
+        "spyhop.worker.ml_tasks.prune_prediction_log": {"queue": "ml"},
     },
 
     # --- Resilience ----------------------------------------------------------
@@ -86,7 +109,67 @@ celery_app.conf.update(
         "brain-evaluate-spatialized-batch-every-30s": {
             "task": "brain.evaluate_spatialized_batch",
             "schedule": 30.0,
-            "options": {"queue": "default"},
+            # soft_time_limit/time_limit are enforced by the worker process;
+            # keeping them just under the beat interval prevents pile-up when
+            # a batch stalls (e.g. Redis timeout, slow IUU lookup).
+            "options": {
+                "queue": "brain",
+                "soft_time_limit": 25,
+                "time_limit": 28,
+            },
+        },
+        "prune-vessel-tracks-weekly": {
+            "task": "spyhop.worker.tasks.prune_vessel_tracks",
+            "schedule": crontab(hour=4, minute=0, day_of_week=0),
+            "options": {"queue": "sync"},
+        },
+        # --- ML pipeline schedule --------------------------------------------
+        "ml-train-risk-scorer-weekly": {
+            "task": "spyhop.worker.ml_tasks.train_risk_model",
+            "schedule": crontab(hour=4, minute=0, day_of_week=0),
+            "options": {"queue": "ml"},
+        },
+        "ml-train-behavior-classifier-weekly": {
+            "task": "spyhop.worker.ml_tasks.train_behavior_model",
+            "schedule": crontab(hour=4, minute=30, day_of_week=0),
+            "options": {"queue": "ml"},
+        },
+        "ml-promote-shadow-model-weekly": {
+            "task": "spyhop.worker.ml_tasks.promote_shadow_model",
+            "schedule": crontab(hour=5, minute=0, day_of_week=1),
+            "options": {"queue": "ml"},
+        },
+        "ml-monitor-score-drift-every-6h": {
+            "task": "spyhop.worker.ml_tasks.monitor_score_drift",
+            "schedule": crontab(minute=45, hour="*/6"),
+            "options": {"queue": "ml"},
+        },
+        "ml-prune-prediction-log-daily": {
+            "task": "spyhop.worker.ml_tasks.prune_prediction_log",
+            "schedule": crontab(hour=1, minute=30),
+            "options": {"queue": "ml"},
+        },
+        # --- Corridor analysis pipeline --------------------------------------
+        "corridor-snapshot-hourly": {
+            "task": "spyhop.worker.tasks.snapshot_vessel_positions",
+            "schedule": crontab(minute=50),   # :50 past every hour
+            "options": {"queue": "sync"},
+        },
+        "corridor-materialize-weekly": {
+            "task": "spyhop.worker.tasks.materialize_h3_corridors",
+            "schedule": crontab(hour=1, minute=0, day_of_week=0),
+            "options": {"queue": "sync"},
+        },
+        "corridor-prune-daily": {
+            "task": "spyhop.worker.tasks.prune_vessel_snapshots",
+            "schedule": crontab(hour=0, minute=30),
+            "options": {"queue": "sync"},
+        },
+        # --- Ecological mask refresh ----------------------------------------
+        "ecological-masks-nightly": {
+            "task": "spyhop.worker.tasks.refresh_ecological_masks",
+            "schedule": crontab(hour=0, minute=15),
+            "options": {"queue": "sync"},
         },
     },
 )

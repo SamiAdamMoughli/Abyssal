@@ -5,6 +5,8 @@
 
 import { API_URL } from './config.js';
 
+export { API_URL };
+
 const panel   = () => document.getElementById('detail-panel');
 const content = () => document.getElementById('detail-content');
 
@@ -33,8 +35,18 @@ async function _fetchAndRender(mmsi) {
 }
 
 // -----------------------------------------------------------------------
-// Renderers
+// Renderers — exported so fleet.js can reuse without re-fetching
 // -----------------------------------------------------------------------
+
+export function renderVesselProfile(d) {
+  return _renderDetail(d);
+}
+
+export async function fetchVesselProfile(mmsi) {
+  const r = await fetch(`${API_URL}/api/vessels/${mmsi}/detail`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
 
 function _renderDetail(d) {
   const id   = d.identity   || {};

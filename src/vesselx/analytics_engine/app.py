@@ -1,4 +1,4 @@
-"""VesselX analytics engine — heatmap, EEZ risk, and anomaly endpoints."""
+"""VesselX analytics engine — heatmap, EEZ risk, anomaly, and corridor endpoints."""
 
 from __future__ import annotations
 
@@ -10,6 +10,11 @@ import asyncpg
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 
+from spyhop.analytics.corridor import (
+    DARK_GAP_THRESHOLD_HOURS,
+    compute_dark_gaps,
+    h3_cell_center,
+)
 from vesselx import __version__
 
 _DB_URL = os.environ.get(
@@ -168,3 +173,158 @@ async def top_threats(limit: int = Query(10, ge=1, le=50)) -> list[dict]:
             limit,
         )
     return [dict(r) for r in rows]
+
+
+@app.get("/corridors/h3")
+async def corridors_h3(
+    weeks: int = Query(4, ge=1, le=52, description="Number of recent weeks to include"),
+    min_score: float = Query(0.0, ge=0.0, description="Minimum corridor_score to return"),
+    limit: int = Query(500, ge=1, le=5000),
+) -> dict[str, Any]:
+    """Return H3 res-5 structural risk corridor cells.
+
+    Each cell carries a ``corridor_score`` that combines high-risk vessel
+    density, dark vessel count, rendezvous events, and MPA incursions,
+    multiplied by sqrt(persistence_weeks).  Cells that recur across many
+    weeks score highest — that's the structural corridor signal.
+
+    Response shape:
+      cells: list of {h3_cell, lat, lon, corridor_score, persistence_weeks,
+                       vessel_count, high_risk_count, dark_vessel_count,
+                       dominant_flag, dominant_vessel_type, week_start}
+    """
+    if _pool is None:
+        return {"cells": [], "weeks": weeks}
+    async with _pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT
+                h3_cell, week_start,
+                vessel_count, high_risk_count, med_risk_count,
+                dark_vessel_count, rendezvous_count, mpa_incursion_count,
+                avg_risk_score, max_risk_score,
+                dominant_flag, dominant_vessel_type,
+                persistence_weeks, corridor_score
+            FROM h3_risk_corridors
+            WHERE week_start >= (CURRENT_DATE - ($1 * INTERVAL '1 week'))
+              AND corridor_score >= $2
+            ORDER BY corridor_score DESC
+            LIMIT $3
+            """,
+            weeks,
+            min_score,
+            limit,
+        )
+
+    cells = []
+    for r in rows:
+        lat, lon = h3_cell_center(r["h3_cell"])
+        cells.append({
+            "h3_cell": r["h3_cell"],
+            "lat": lat,
+            "lon": lon,
+            "week_start": str(r["week_start"]),
+            "corridor_score": round(float(r["corridor_score"]), 3),
+            "persistence_weeks": r["persistence_weeks"],
+            "vessel_count": r["vessel_count"],
+            "high_risk_count": r["high_risk_count"],
+            "med_risk_count": r["med_risk_count"],
+            "dark_vessel_count": r["dark_vessel_count"],
+            "rendezvous_count": r["rendezvous_count"],
+            "mpa_incursion_count": r["mpa_incursion_count"],
+            "avg_risk_score": round(float(r["avg_risk_score"]), 1),
+            "max_risk_score": round(float(r["max_risk_score"]), 1),
+            "dominant_flag": r["dominant_flag"],
+            "dominant_vessel_type": r["dominant_vessel_type"],
+        })
+
+    return {"cells": cells, "count": len(cells), "weeks": weeks}
+
+
+@app.get("/corridors/dark-gaps")
+async def corridors_dark_gaps(
+    gap_hours: float = Query(
+        DARK_GAP_THRESHOLD_HOURS, ge=1.0, le=72.0,
+        description="Minimum AIS gap hours to qualify as a dark transit",
+    ),
+    implausible_only: bool = Query(
+        False,
+        description="If true, return only gaps where implied speed > 30 kn",
+    ),
+    limit: int = Query(200, ge=1, le=2000),
+) -> dict[str, Any]:
+    """Derive dark-transit vectors from vessel_tracks.
+
+    Finds consecutive pings per MMSI where the inter-ping gap exceeds
+    ``gap_hours``, then computes the haversine displacement and implied
+    speed.  Results are binned to H3 res-5 departure and arrival cells.
+
+    A gap with implied_speed_kn > 30 is almost certainly positional
+    manipulation — the vessel was physically somewhere else during the
+    dark window.  Use ``implausible_only=true`` to surface only those.
+
+    Response shape:
+      gaps: list of GeoJSON-style features with properties
+            {mmsi, from_h3_5, to_h3_5, gap_hours, displacement_nm,
+             implied_speed_kn, implausible, dark_start, dark_end}
+    """
+    if _pool is None:
+        return {"gaps": [], "count": 0}
+
+    async with _pool.acquire() as conn:
+        # Pull last 7 days of tracks, ordered per vessel
+        rows = await conn.fetch(
+            """
+            SELECT
+                mmsi,
+                ST_Y(position::geometry) AS lat,
+                ST_X(position::geometry) AS lon,
+                timestamp
+            FROM vessel_tracks
+            WHERE timestamp >= NOW() - INTERVAL '7 days'
+            ORDER BY mmsi, timestamp
+            LIMIT 50000
+            """,
+        )
+
+    # Group into per-MMSI sequences
+    from collections import defaultdict as _dd  # noqa: PLC0415
+    buckets: dict[str, list[dict]] = _dd(list)
+    for r in rows:
+        buckets[r["mmsi"]].append({
+            "mmsi": r["mmsi"],
+            "lat": float(r["lat"]),
+            "lon": float(r["lon"]),
+            "timestamp": r["timestamp"],
+        })
+
+    all_gaps = []
+    for mmsi_tracks in buckets.values():
+        all_gaps.extend(compute_dark_gaps(mmsi_tracks, threshold_hours=gap_hours))
+
+    if implausible_only:
+        all_gaps = [g for g in all_gaps if g.implausible]
+
+    # Sort by gap_hours descending (longest dark windows first)
+    all_gaps.sort(key=lambda g: g.gap_hours, reverse=True)
+    all_gaps = all_gaps[:limit]
+
+    features = []
+    for g in all_gaps:
+        features.append({
+            "mmsi": g.mmsi,
+            "from_lat": g.from_lat,
+            "from_lon": g.from_lon,
+            "to_lat": g.to_lat,
+            "to_lon": g.to_lon,
+            "from_h3_5": g.from_h3_5,
+            "to_h3_5": g.to_h3_5,
+            "gap_hours": g.gap_hours,
+            "displacement_nm": g.displacement_nm,
+            "implied_speed_kn": g.implied_speed_kn,
+            "implausible": g.implausible,
+            "dark_start": g.dark_start.isoformat(),
+            "dark_end": g.dark_end.isoformat(),
+        })
+
+    return {"gaps": features, "count": len(features)}

@@ -60,6 +60,11 @@ anyio[trio]==4.7.0
 PyJWT==2.10.1
 passlib[bcrypt]==1.7.4
 
+# --- ML / MLOps pipeline -----------------------------------------------------
+numpy==2.0.2
+scikit-learn==1.5.2
+joblib==1.4.2
+
 # --- Type checking (dev) ------------------------------------------------------
 # mypy==1.13.0
 # types-requests==2.32.0

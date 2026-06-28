@@ -9,113 +9,363 @@
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet" />
 </head>
 <body>
-  <div id="app">
-    <header id="topbar">
-      <div class="logo"><span class="skull">☠</span>SPYHOP</div>
-      <div class="subtitle">MISSION RADAR</div>
-      <div class="topbar-spacer"></div>
-      <div id="status-pill" class="pill syn"><span class="dot"></span><span id="status-text">CONNECTING</span></div>
-      <button id="auth-btn" class="auth-btn" title="Authenticate as operator">⚿ LOGIN</button>
-      <div class="toggle-group">
-        <button class="toggle-btn" data-mode="vessels">🚢 VESSELS</button>
-        <button class="toggle-btn" data-mode="mpas">🛡 MPAs</button>
-        <button class="toggle-btn active" data-mode="both">⊕ BOTH</button>
+  <!-- ================================================================
+       NAV RAIL — persists across all views
+       ================================================================ -->
+  <nav id="nav-rail">
+    <div class="nav-logo">
+      <span class="nav-skull">☠</span>
+    </div>
+
+    <button class="nav-btn active" data-view="ops" title="Live Operations">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>
+        <line x1="12" y1="3" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="21"/>
+        <line x1="3" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="21" y2="12"/>
+      </svg>
+      <span>OPS</span>
+    </button>
+
+    <button class="nav-btn" data-view="fleet" title="Fleet Registry">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <rect x="3" y="4" width="18" height="3" rx="1"/>
+        <rect x="3" y="10.5" width="18" height="3" rx="1"/>
+        <rect x="3" y="17" width="18" height="3" rx="1"/>
+      </svg>
+      <span>FLEET</span>
+    </button>
+
+    <button class="nav-btn" data-view="analytics" title="Spatial Analytics">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/>
+      </svg>
+      <span>INTEL</span>
+    </button>
+
+    <button class="nav-btn" data-view="governance" title="System Governance">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+        <path d="M12 2v2M12 20v2M2 12h2M20 12h2"/>
+      </svg>
+      <span>SYS</span>
+    </button>
+
+    <div class="nav-bottom">
+      <div id="nav-status-dot" class="nav-status-dot" title="System status"></div>
+    </div>
+  </nav>
+
+  <!-- ================================================================
+       VIEW 1 — LIVE OPERATIONS CENTER
+       ================================================================ -->
+  <div id="view-ops" class="view view-active">
+    <div id="ops-layout">
+
+      <header id="topbar">
+        <div class="logo"><span class="skull">☠</span>SPYHOP</div>
+        <div class="subtitle">MISSION RADAR</div>
+        <div class="topbar-spacer"></div>
+        <div id="status-pill" class="pill syn"><span class="dot"></span><span id="status-text">CONNECTING</span></div>
+        <button id="auth-btn" class="auth-btn" title="Authenticate as operator">⚿ LOGIN</button>
+        <div class="toggle-group">
+          <button class="toggle-btn" data-mode="vessels">🚢 VESSELS</button>
+          <button class="toggle-btn" data-mode="mpas">🛡 MPAs</button>
+          <button class="toggle-btn active" data-mode="both">⊕ BOTH</button>
+        </div>
+        <select id="base-layer-select" class="base-layer-select" aria-label="Base map layer">
+          <option value="dark">🌑 DARK MATTER</option>
+          <option value="satellite">🛰 SATELLITE</option>
+          <option value="bathymetric">🌊 BATHYMETRIC</option>
+          <option value="terrain">⛰ TERRAIN</option>
+          <option value="osm">🗺 STREET MAP</option>
+          <option value="noaa">⚓ NOAA NAUTICAL</option>
+        </select>
+        <div class="count"><b id="vessel-count">—</b> vessels<span id="mpa-count"></span></div>
+        <button id="alert-toggle-btn" class="alert-toggle-btn" aria-label="Toggle alert panel">
+          ⚡ ALERTS
+          <span id="alert-badge" class="alert-badge" style="display:none"></span>
+        </button>
+      </header>
+
+      <aside id="sidebar">
+        <div class="sidebar-head">
+          <h2>VESSEL LIST</h2>
+          <div class="sub" id="sidebar-sub">Search and sort all vessels</div>
+          <div class="daterow">
+            <div class="datefield"><label>FROM</label><input type="date" id="date-from" /></div>
+            <div class="datefield"><label>TO</label><input type="date" id="date-to" /></div>
+          </div>
+          <div class="sidebar-controls">
+            <input id="search-input" type="search" placeholder="Search name, MMSI, flag…" />
+            <select id="sort-select" aria-label="Sort vessels">
+              <option value="score_desc">Score ↓</option>
+              <option value="score_asc">Score ↑</option>
+              <option value="name_asc">Name A→Z</option>
+              <option value="name_desc">Name Z→A</option>
+              <option value="flag_asc">Flag A→Z</option>
+              <option value="mpa_first">In MPA first</option>
+            </select>
+          </div>
+          <div class="cat-filters" id="cat-filters">
+            <button class="cat-btn active" data-cat="all">ALL</button>
+            <button class="cat-btn" data-cat="commercial">
+              <svg width="14" height="8" viewBox="0 0 14 8" aria-hidden="true"><rect x=".5" y=".5" width="13" height="7" rx="1" fill="currentColor"/></svg>COMMERCIAL
+            </button>
+            <button class="cat-btn" data-cat="fishing">
+              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><polygon points="5,0.5 9.5,5 5,9.5 0.5,5" fill="currentColor"/></svg>FISHING
+            </button>
+            <button class="cat-btn" data-cat="enforcement">
+              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><polygon points="5,0.5 9.5,9.5 0.5,9.5" fill="currentColor"/></svg>ENFORCEMENT
+            </button>
+            <button class="cat-btn" data-cat="support">
+              <svg width="14" height="8" viewBox="0 0 14 8" aria-hidden="true"><rect x=".5" y=".5" width="13" height="7" rx="3.5" fill="currentColor"/></svg>SUPPORT
+            </button>
+          </div>
+
+          <!-- Quick filters strip -->
+          <div class="qf-strip" id="qf-strip">
+            <button class="qf-btn" data-qf="fishing_only" title="Fishing vessels only">🎣</button>
+            <button class="qf-btn" data-qf="mpa_only" title="Vessels inside MPAs">🛡</button>
+            <button class="qf-btn" data-qf="dark_only" title="Dark/gap vessels">◌</button>
+            <button class="qf-btn" data-qf="hi_risk" title="High risk ≥ 70">🔴</button>
+          </div>
+        </div>
+        <div id="cards"></div>
+      </aside>
+
+      <div id="map"></div>
+    </div>
+
+    <!-- Floating controls (inside ops view) -->
+    <button id="search-btn">🔍 SEARCH THIS AREA</button>
+    <button id="hex-mode-btn">⬡ HEX GRID</button>
+    <button id="hex-search-btn" disabled style="display:none">⬡ SEARCH SELECTED — <span id="hex-selection-count"></span></button>
+    <div id="area-warn">⚠ LARGE AREA — results may be slow or limited. Zoom in for best results.</div>
+
+    <!-- Vessel detail drawer -->
+    <div id="detail-panel">
+      <div id="detail-content"></div>
+    </div>
+
+    <!-- Alert sidebar -->
+    <div id="alert-panel" class="alert-panel" hidden>
+      <div class="alert-panel-head">
+        <h2>⚡ LIVE ALERTS</h2>
+        <button id="alert-panel-close" class="alert-panel-close" aria-label="Close alert panel">✕</button>
       </div>
-      <select id="base-layer-select" class="base-layer-select" aria-label="Base map layer">
-        <option value="dark">🌑 DARK MATTER</option>
-        <option value="satellite">🛰 SATELLITE</option>
-        <option value="bathymetric">🌊 BATHYMETRIC</option>
-        <option value="terrain">⛰ TERRAIN</option>
-        <option value="osm">🗺 STREET MAP</option>
-        <option value="noaa">⚓ NOAA NAUTICAL</option>
+      <div id="alert-list" class="alert-list">
+        <div class="alert-empty">No alerts — all clear.</div>
+      </div>
+    </div>
+
+    <!-- Overlay panel -->
+    <div id="overlay-panel" class="overlay-panel">
+      <div class="overlay-title">OVERLAYS</div>
+      <label class="overlay-row">
+        <input type="checkbox" id="overlay-heatmap" />
+        <span>🔥 Vessel density heatmap</span>
+      </label>
+      <label class="overlay-row">
+        <input type="checkbox" id="overlay-weather" />
+        <span>🌬 Wind overlay</span>
+      </label>
+      <label class="overlay-row">
+        <input type="checkbox" id="overlay-corridors" />
+        <span>⬡ Risk corridors</span>
+      </label>
+      <label class="overlay-row">
+        <input type="checkbox" id="overlay-dark-gaps" />
+        <span>◌ Dark transits</span>
+      </label>
+    </div>
+
+    <!-- Stats bar -->
+    <div id="stats-bar" class="stats-bar"></div>
+
+    <div id="error-banner"></div>
+    <div id="mpa-loading">◈ Loading protected areas…</div>
+  </div>
+
+  <!-- ================================================================
+       VIEW 2 — INTELLIGENCE & FLEET REGISTRY
+       ================================================================ -->
+  <div id="view-fleet" class="view">
+    <div class="view-header">
+      <div class="vh-title">
+        <span class="vh-icon">☰</span>
+        FLEET REGISTRY
+      </div>
+      <div class="vh-sub" id="fleet-sub">Intelligence & vessel dossiers</div>
+      <div class="vh-spacer"></div>
+      <input id="fleet-search" type="search" class="vh-search" placeholder="Search name, MMSI, IMO, flag…" />
+      <select id="fleet-sort" class="vh-select">
+        <option value="score_desc">Score ↓</option>
+        <option value="score_asc">Score ↑</option>
+        <option value="name_asc">Name A–Z</option>
+        <option value="flag_asc">Flag A–Z</option>
+        <option value="mpa_first">In MPA first</option>
       </select>
-      <div class="count"><b id="vessel-count">—</b> vessels<span id="mpa-count"></span></div>
-      <!-- Alert toggle -->
-      <button id="alert-toggle-btn" class="alert-toggle-btn" aria-label="Toggle alert panel">
-        ⚡ ALERTS
-        <span id="alert-badge" class="alert-badge" style="display:none"></span>
-      </button>
-    </header>
+      <select id="fleet-filter-type" class="vh-select">
+        <option value="all">All types</option>
+        <option value="fishing">Fishing</option>
+        <option value="commercial">Commercial</option>
+        <option value="enforcement">Enforcement</option>
+        <option value="support">Support</option>
+      </select>
+    </div>
 
-    <aside id="sidebar">
-      <div class="sidebar-head">
-        <h2>VESSEL LIST</h2>
-        <div class="sub" id="sidebar-sub">Search and sort all vessels</div>
-        <div class="daterow">
-          <div class="datefield"><label>FROM</label><input type="date" id="date-from" /></div>
-          <div class="datefield"><label>TO</label><input type="date" id="date-to" /></div>
-        </div>
-        <div class="sidebar-controls">
-          <input id="search-input" type="search" placeholder="Search name, MMSI, flag…" />
-          <select id="sort-select" aria-label="Sort vessels">
-            <option value="score_desc">Score ↓</option>
-            <option value="score_asc">Score ↑</option>
-            <option value="name_asc">Name A→Z</option>
-            <option value="name_desc">Name Z→A</option>
-            <option value="flag_asc">Flag A→Z</option>
-            <option value="mpa_first">In MPA first</option>
-          </select>
-        </div>
-        <div class="cat-filters" id="cat-filters">
-          <button class="cat-btn active" data-cat="all">ALL</button>
-          <button class="cat-btn" data-cat="commercial">
-            <svg width="14" height="8" viewBox="0 0 14 8" aria-hidden="true"><rect x=".5" y=".5" width="13" height="7" rx="1" fill="currentColor"/></svg>COMMERCIAL
-          </button>
-          <button class="cat-btn" data-cat="fishing">
-            <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><polygon points="5,0.5 9.5,5 5,9.5 0.5,5" fill="currentColor"/></svg>FISHING
-          </button>
-          <button class="cat-btn" data-cat="enforcement">
-            <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><polygon points="5,0.5 9.5,9.5 0.5,9.5" fill="currentColor"/></svg>ENFORCEMENT
-          </button>
-          <button class="cat-btn" data-cat="support">
-            <svg width="14" height="8" viewBox="0 0 14 8" aria-hidden="true"><rect x=".5" y=".5" width="13" height="7" rx="3.5" fill="currentColor"/></svg>SUPPORT
-          </button>
+    <div class="fleet-layout">
+      <!-- Left: data table -->
+      <div class="fleet-table-pane">
+        <table class="fleet-table" id="fleet-table">
+          <thead>
+            <tr>
+              <th>VESSEL</th>
+              <th>MMSI</th>
+              <th>FLAG</th>
+              <th>TYPE</th>
+              <th class="col-score">SCORE</th>
+              <th>STATUS</th>
+            </tr>
+          </thead>
+          <tbody id="fleet-tbody">
+            <tr><td colspan="6" class="fleet-empty">Loading fleet data…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Right: dossier -->
+      <div class="fleet-dossier-pane" id="fleet-dossier">
+        <div class="dossier-placeholder">
+          <div class="dp-placeholder-icon">⬡</div>
+          <div class="dp-placeholder-text">Select a vessel to view its full intelligence dossier</div>
         </div>
       </div>
-      <div id="cards"></div>
-    </aside>
-
-    <div id="map"></div>
-  </div>
-
-  <button id="search-btn">🔍 SEARCH THIS AREA</button>
-  <button id="hex-mode-btn">⬡ HEX GRID</button>
-  <button id="hex-search-btn" disabled style="display:none">⬡ SEARCH SELECTED — <span id="hex-selection-count"></span></button>
-  <div id="area-warn">⚠ LARGE AREA — results may be slow or limited. Zoom in for best results.</div>
-  <!-- VESSEL DETAIL PANEL -->
-  <div id="detail-panel">
-    <div id="detail-content"></div>
-  </div>
-
-  <!-- ALERT SIDEBAR -->
-  <div id="alert-panel" class="alert-panel" hidden>
-    <div class="alert-panel-head">
-      <h2>⚡ LIVE ALERTS</h2>
-      <button id="alert-panel-close" class="alert-panel-close" aria-label="Close alert panel">✕</button>
-    </div>
-    <div id="alert-list" class="alert-list">
-      <div class="alert-empty">No alerts — all clear.</div>
     </div>
   </div>
 
-  <!-- STATS BAR -->
-  <div id="stats-bar" class="stats-bar"></div>
+  <!-- ================================================================
+       VIEW 3 — SPATIAL ANALYTICS & TREND EXPLORER
+       ================================================================ -->
+  <div id="view-analytics" class="view">
+    <div class="view-header">
+      <div class="vh-title">
+        <span class="vh-icon">◈</span>
+        SPATIAL ANALYTICS
+      </div>
+      <div class="vh-sub">Historical trends · MPA dwell · V2V encounters</div>
+      <div class="vh-spacer"></div>
+      <div class="vh-date-range">
+        <label class="vh-date-label">FROM</label>
+        <input type="date" id="analytics-from" class="vh-date-input" />
+        <label class="vh-date-label">TO</label>
+        <input type="date" id="analytics-to" class="vh-date-input" />
+        <button id="analytics-run" class="vh-run-btn">▶ RUN ANALYSIS</button>
+      </div>
+    </div>
 
-  <!-- OVERLAY CONTROLS -->
-  <div id="overlay-panel" class="overlay-panel">
-    <div class="overlay-title">OVERLAYS</div>
-    <label class="overlay-row">
-      <input type="checkbox" id="overlay-heatmap" />
-      <span>🔥 Vessel density heatmap</span>
-    </label>
-    <label class="overlay-row">
-      <input type="checkbox" id="overlay-weather" />
-      <span>🌬 Wind overlay</span>
-    </label>
+    <div class="analytics-layout">
+      <!-- Left column: map + playback -->
+      <div class="analytics-map-col">
+        <div id="analytics-map"></div>
+        <div class="playback-bar" id="playback-bar">
+          <div class="pb-controls">
+            <button class="pb-btn" id="pb-play" title="Play">▶</button>
+            <button class="pb-btn" id="pb-pause" title="Pause" disabled>⏸</button>
+            <button class="pb-btn" id="pb-reset" title="Reset">⏮</button>
+            <span class="pb-label" id="pb-date-label">—</span>
+          </div>
+          <input type="range" id="pb-slider" class="pb-slider" min="0" max="100" value="0" />
+          <div class="pb-speed">
+            <label class="pb-speed-label">SPEED</label>
+            <select id="pb-speed-select" class="pb-speed-select">
+              <option value="1">1×</option>
+              <option value="4">4×</option>
+              <option value="12" selected>12×</option>
+              <option value="48">48×</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right column: analytics panels -->
+      <div class="analytics-panels-col">
+        <!-- H3 Density summary -->
+        <div class="ap-card" id="ap-density">
+          <div class="ap-card-title">H3 DENSITY SUMMARY</div>
+          <div class="ap-card-body" id="density-body">
+            <div class="ap-empty">Run analysis to compute density tiles</div>
+          </div>
+        </div>
+
+        <!-- MPA dwell table -->
+        <div class="ap-card" id="ap-mpa-dwell">
+          <div class="ap-card-title">MPA DWELL — TOP OFFENDERS</div>
+          <div class="ap-card-body" id="mpa-dwell-body">
+            <div class="ap-empty">Select date range and run analysis</div>
+          </div>
+        </div>
+
+        <!-- Encounter matrix -->
+        <div class="ap-card ap-card--tall" id="ap-encounters">
+          <div class="ap-card-title">V2V ENCOUNTER MATRIX</div>
+          <div class="ap-card-body" id="encounter-body">
+            <div class="ap-empty">No encounter data for selected period</div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <div id="error-banner"></div>
-  <div id="mpa-loading">◈ Loading protected areas…</div>
+  <!-- ================================================================
+       VIEW 4 — SYSTEM GOVERNANCE & PIPELINE MONITOR
+       ================================================================ -->
+  <div id="view-governance" class="view">
+    <div class="view-header">
+      <div class="vh-title">
+        <span class="vh-icon">⚙</span>
+        SYSTEM GOVERNANCE
+      </div>
+      <div class="vh-sub" id="gov-last-check">Pipeline monitor · Rule engine · Telemetry</div>
+      <div class="vh-spacer"></div>
+      <button id="gov-refresh-btn" class="vh-run-btn">↻ REFRESH</button>
+    </div>
+
+    <div class="governance-layout">
+
+      <!-- Row 1: Service health grid -->
+      <section class="gov-section">
+        <div class="gov-section-title">INGESTION PIPELINE</div>
+        <div class="gov-health-grid" id="gov-health-grid">
+          <!-- Cards injected by governance.js -->
+          <div class="ghc ghc-loading"><div class="ghc-name">LOADING…</div></div>
+        </div>
+      </section>
+
+      <!-- Row 2: Rule Engine + Telemetry (side by side) -->
+      <div class="gov-row2">
+
+        <!-- Rule engine -->
+        <section class="gov-section gov-section--rules">
+          <div class="gov-section-title">RULE ENGINE ORCHESTRATOR</div>
+          <div class="gov-rules-list" id="gov-rules-list">
+            <!-- Rows injected by governance.js -->
+          </div>
+        </section>
+
+        <!-- DB / cache telemetry -->
+        <section class="gov-section gov-section--telemetry">
+          <div class="gov-section-title">DATABASE & CACHE TELEMETRY</div>
+          <div class="gov-telemetry" id="gov-telemetry">
+            <!-- Bars injected by governance.js -->
+          </div>
+        </section>
+
+      </div>
+
+    </div>
+  </div>
 
   <script type="module" src="/src/main.js"></script>
 </body>

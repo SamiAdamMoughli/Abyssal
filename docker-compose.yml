@@ -142,7 +142,22 @@ services:
       celery -A spyhop.worker.celery_app worker
       --loglevel=info
       --concurrency=4
-      --queues=default,scoring,sync
+      --queues=default,scoring,sync,brain
+    volumes:
+      - vesselx_model_artifacts:/app/model_artifacts
+
+  vesselx-ml-worker:
+    <<: *vesselx-base
+    container_name: vesselx-ml-worker
+    command: >
+      celery -A spyhop.worker.celery_app worker
+      --loglevel=info
+      --concurrency=1
+      --queues=ml
+    volumes:
+      - vesselx_model_artifacts:/app/model_artifacts
+    profiles:
+      - ml
 
   vesselx-sync-worker:
     <<: *vesselx-base
@@ -222,6 +237,7 @@ volumes:
   vesselx_redisdata:
   vesselx_desktop_node_modules:
   vesselx_vector_tiles:
+  vesselx_model_artifacts:
 
 networks:
   vesselx_net:

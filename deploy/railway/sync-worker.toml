@@ -1,0 +1,25 @@
+# =============================================================================
+# Railway service: vesselx-sync-worker  (Celery beat scheduler)
+# Role: Periodic task scheduler — triggers GFW polls, enrichment jobs.
+# Exposed: no port
+# NOTE: Only ONE instance of this service should ever run.
+#       Railway should have "replicas = 1" and no autoscaling.
+# =============================================================================
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = """
+  celery -A spyhop.worker.celery_app beat \
+    --loglevel=info \
+    --scheduler celery.beat.PersistentScheduler \
+    --schedule /tmp/celerybeat-schedule
+"""
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[deploy.envVars]
+PYTHONPATH = "/app/src:/app"
+PYTHONUNBUFFERED = "1"

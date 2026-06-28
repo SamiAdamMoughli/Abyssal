@@ -1,0 +1,18 @@
+# =============================================================================
+# Railway service: vesselx-spatial-worker
+# Role: Consumes spatial computation jobs from Redis queue.
+# Exposed: no port
+# =============================================================================
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "python -m vesselx.spatial_worker.worker"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[deploy.envVars]
+PYTHONPATH = "/app/src:/app"
+PYTHONUNBUFFERED = "1"

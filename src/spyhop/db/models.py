@@ -10,17 +10,20 @@ Four tables:
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Optional
 
 from geoalchemy2 import Geometry, WKBElement
 from geoalchemy2.shape import to_shape
 from sqlalchemy import (
+    BigInteger,
     Boolean,
+    Date,
     DateTime,
     Float,
     Index,
     Integer,
+    PrimaryKeyConstraint,
     String,
     Text,
     UniqueConstraint,
@@ -349,11 +352,9 @@ class VesselTrack(Base):
     __table_args__ = (
         # Composite index: all track queries filter by mmsi then sort by ts
         Index("idx_vessel_tracks_mmsi_ts", "mmsi", "timestamp"),
-        Index(
-            "idx_vessel_tracks_gist",
-            "position",
-            postgresql_using="gist",
-        ),
+        # BRIN on timestamp for fast prune (DELETE WHERE timestamp < cutoff).
+        # The GiST on position was dropped in migration 0010 — no query uses it.
+        Index("idx_vessel_tracks_ts_brin", "timestamp", postgresql_using="brin"),
     )
 
     id: Mapped[int] = mapped_column(
@@ -370,6 +371,171 @@ class VesselTrack(Base):
         DateTime(timezone=True), nullable=False
     )
     source: Mapped[str] = mapped_column(String(20), default="unknown")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+# ---------------------------------------------------------------------------
+# VesselPositionSnapshot
+# ---------------------------------------------------------------------------
+
+
+class VesselPositionSnapshot(Base):
+    """Append-only hourly snapshot of vessel_positions for corridor analysis.
+
+    Written by ``snapshot_vessel_positions`` every hour. Pruned after 90 days
+    by ``prune_vessel_snapshots``. The h3_index_5 column (H3 res-5 parent of
+    h3_index_7) is the primary grouping key for weekly corridor materialization.
+    """
+
+    __tablename__ = "vessel_position_snapshots"
+    __table_args__ = (
+        Index("idx_snapshots_h3_5_snapped", "h3_index_5", "snapped_at"),
+        Index("idx_snapshots_mmsi_snapped", "mmsi", "snapped_at"),
+        Index("idx_snapshots_snapped", "snapped_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    mmsi: Mapped[str] = mapped_column(String(20), nullable=False)
+    h3_index_7: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    h3_index_5: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    risk_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    flag: Mapped[str] = mapped_column(String(10), nullable=False, default="UNK")
+    vessel_type: Mapped[str] = mapped_column(String(50), nullable=False, default="unknown")
+    ais_gap_hours: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    loitering_hours: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    in_protected_area: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    rendezvous_duration_hours: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    spoofing_flag: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    snapped_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+# ---------------------------------------------------------------------------
+# H3RiskCorridor
+# ---------------------------------------------------------------------------
+
+
+class H3RiskCorridor(Base):
+    """Weekly H3 res-5 risk corridor aggregate.
+
+    Materialized every Sunday at 01:00 UTC by ``materialize_h3_corridors``.
+    Primary key is (h3_cell, week_start) so each run is idempotently upserted.
+
+    corridor_score is the composite ranking signal:
+      (high_risk*3 + med_risk + dark*2 + rendezvous*2.5 + mpa*2) × √persistence_weeks
+    A high corridor_score on a cell that recurs across many weeks is the
+    structural corridor signal — distinguishing smuggling routes from noise.
+    """
+
+    __tablename__ = "h3_risk_corridors"
+    __table_args__ = (
+        PrimaryKeyConstraint("h3_cell", "week_start", name="pk_h3_risk_corridors"),
+        Index("idx_h3_corridors_score", "corridor_score"),
+        Index("idx_h3_corridors_week", "week_start"),
+    )
+
+    h3_cell: Mapped[str] = mapped_column(String(20), nullable=False, primary_key=True)
+    week_start: Mapped[date] = mapped_column(Date, nullable=False, primary_key=True)
+
+    vessel_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    high_risk_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    med_risk_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    dark_vessel_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    rendezvous_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    mpa_incursion_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    avg_risk_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    max_risk_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    dominant_flag: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    dominant_vessel_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+
+    # Persistence = distinct weeks across full history where high_risk_count > 0
+    persistence_weeks: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    corridor_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    materialized_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+# ---------------------------------------------------------------------------
+# MLModelRegistry
+# ---------------------------------------------------------------------------
+
+
+class MLModelRegistry(Base):
+    """One row per trained model version.
+
+    Lifecycle: shadow → active → retired.
+    Only one row per (model_name) may hold status='active' at a time;
+    the promote helper in ml.registry enforces this atomically.
+
+    artifact_path points to a joblib file inside the model-artifacts volume,
+    e.g. /app/model_artifacts/risk_scorer/1.0.0/model.joblib
+    """
+
+    __tablename__ = "ml_model_registry"
+    __table_args__ = (
+        UniqueConstraint("model_name", "version", name="uq_ml_model_version"),
+        Index("idx_ml_registry_name_status", "model_name", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True
+    )
+    model_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    version: Mapped[str] = mapped_column(String(20), nullable=False)
+    artifact_path: Mapped[str] = mapped_column(Text, nullable=False)
+    # {"mae": 0.05, "r2": 0.92, "n_train": 1200,
+    #  "score_histogram": [0.1, 0.2, ...]}
+    metrics_json: Mapped[Optional[Any]] = mapped_column(
+        JSONB, nullable=True, default=dict
+    )
+    # ordered feature name list used at training time
+    feature_names_json: Mapped[Optional[Any]] = mapped_column(
+        JSONB, nullable=True, default=list
+    )
+    # shadow / active / retired
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="shadow"
+    )
+    trained_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    promoted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    retired_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+# ---------------------------------------------------------------------------
+# MLPredictionLog
+# ---------------------------------------------------------------------------
+
+
+class MLPredictionLog(Base):
+    """Append-only log of shadow/active model predictions.
+
+    Used by the drift monitor to compare the current score distribution
+    against the training-time baseline stored in MLModelRegistry.metrics_json.
+    Rows older than 30 days are pruned by the ml.prune_prediction_log task.
+    """
+
+    __tablename__ = "ml_prediction_log"
+    __table_args__ = (
+        Index("idx_ml_pred_log_created", "created_at"),
+        Index("idx_ml_pred_log_mmsi_model", "mmsi", "model_name"),
+    )
+
+    id: Mapped[int] = mapped_column(
+        BigInteger, primary_key=True, autoincrement=True
+    )
+    model_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    version: Mapped[str] = mapped_column(String(20), nullable=False)
+    mmsi: Mapped[str] = mapped_column(String(20), nullable=False)
+    predicted_score: Mapped[float] = mapped_column(Float, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

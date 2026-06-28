@@ -17,4 +17,10 @@ export const state = {
   // Alert feed
   alertsSocket: null,
   alertsCache: [],
+  // Navigation
+  activeView: 'ops',
+  // Quick filters (ops sidebar)
+  _quickFilters: [],
+  // Timestamp of last vessel data fetch (for cache age telemetry)
+  _lastFetch: null,
 };

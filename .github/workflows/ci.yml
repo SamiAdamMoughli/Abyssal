@@ -1,0 +1,121 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Lint
+  # ---------------------------------------------------------------------------
+  lint:
+    name: Lint (ruff + mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install lint dependencies
+        run: pip install ruff mypy
+
+      - name: ruff check
+        run: ruff check src/
+
+      - name: ruff format check
+        run: ruff format --check src/
+
+  # ---------------------------------------------------------------------------
+  # Test
+  # ---------------------------------------------------------------------------
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: kartoza/postgis:16-3.4
+        env:
+          POSTGRES_USER: vesselx
+          POSTGRES_PASSWORD: vesselx
+          POSTGRES_DB: vesselx
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U vesselx -d vesselx"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://vesselx:vesselx@localhost:5432/vesselx
+      SYNC_DATABASE_URL: postgresql+psycopg2://vesselx:vesselx@localhost:5432/vesselx
+      REDIS_URL: redis://localhost:6379/0
+      CELERY_BROKER_URL: redis://localhost:6379/1
+      CELERY_RESULT_BACKEND: redis://localhost:6379/2
+      DATA_SOURCE: synthetic
+      LOG_LEVEL: WARNING
+      GFW_API_TOKEN: ci-placeholder
+      GFW_API_KEY: ci-placeholder
+      AISSTREAM_API_KEY: ci-placeholder
+      PYTHONPATH: src
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install OS deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libgeos-dev libpq-dev libproj-dev gdal-bin libgdal-dev
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run migrations
+        run: alembic upgrade head
+
+      - name: Run tests
+        run: pytest backend/tests/ -v --tb=short
+
+  # ---------------------------------------------------------------------------
+  # Docker build smoke test
+  # ---------------------------------------------------------------------------
+  docker-build:
+    name: Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

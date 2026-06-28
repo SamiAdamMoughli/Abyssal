@@ -44,9 +44,21 @@ export function sortVessels(a, b) {
   return b.score - a.score;
 }
 
+export function matchesQuickFilters(v) {
+  const qf = state._quickFilters || [];
+  if (!qf.length) return true;
+  return qf.every(f => {
+    if (f === 'fishing_only') return String(v.vessel_type || '').toLowerCase().includes('fish');
+    if (f === 'mpa_only')    return v.in_protected_area;
+    if (f === 'dark_only')   return v.dark_vessel || v.gap_events_90d > 0;
+    if (f === 'hi_risk')     return (v.risk_score ?? 0) >= 70;
+    return true;
+  });
+}
+
 export function getVisibleVessels() {
   return state.vesselsCache
-    .filter(v => matchesSearch(v, state.currentFilter) && matchesCategory(v))
+    .filter(v => matchesSearch(v, state.currentFilter) && matchesCategory(v) && matchesQuickFilters(v))
     .slice()
     .sort(sortVessels);
 }

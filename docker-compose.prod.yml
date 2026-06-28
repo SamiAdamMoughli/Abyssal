@@ -1,0 +1,117 @@
+# =============================================================================
+# docker-compose.prod.yml — PRODUCTION overrides
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Adds:
+#   - Resource limits (memory + CPU) per service
+#   - restart: always (survives host reboots)
+#   - Production log levels
+#   - No bind-mounts (images are fully self-contained)
+#   - Postgres NOT exposed on host (internal network only)
+#   - Multi-worker API processes
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Infrastructure
+  # ---------------------------------------------------------------------------
+  vesselx-core-db:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: "1.0"
+
+  vesselx-shipboard-store:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "0.5"
+
+  vesselx-telemetry-cache:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 384m
+          cpus: "0.5"
+
+  # ---------------------------------------------------------------------------
+  # API services — production worker counts, no reload
+  # ---------------------------------------------------------------------------
+  vesselx-spatial-engine:
+    restart: always
+    command: >
+      uvicorn vesselx.spatial_engine.app:app
+      --host 0.0.0.0
+      --port 8000
+      --workers 4
+      --loop uvloop
+      --http httptools
+      --log-level info
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: "2.0"
+
+  vesselx-analytics-engine:
+    restart: always
+    command: >
+      uvicorn vesselx.analytics_engine.app:app
+      --host 0.0.0.0
+      --port 8001
+      --workers 2
+      --loop uvloop
+      --http httptools
+      --log-level info
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"
+
+  vesselx-brain-api:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.5"
+
+  # ---------------------------------------------------------------------------
+  # Workers
+  # ---------------------------------------------------------------------------
+  vesselx-brain:
+    restart: always
+    command: >
+      celery -A spyhop.worker.celery_app worker
+      --loglevel=info
+      --concurrency=4
+      --queues=default,scoring,sync
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"
+
+  vesselx-sync-worker:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.25"
+
+  vesselx-spatial-worker:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"

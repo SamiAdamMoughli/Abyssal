@@ -2,6 +2,7 @@
    SEA SHEPHERD PALETTE
    ===================================================================== */
 :root {
+  --nav-w: 56px;
   --ss-orange: #f45700;
   --ss-red: #ff1053;
   --ss-navy: #0d1b2a;
@@ -69,19 +70,21 @@ h3,
 /* =====================================================================
    LAYOUT
    ===================================================================== */
-#app {
+/* #app lives inside #view-ops and inherits the ops grid */
+#ops-layout {
   display: grid;
   grid-template-rows: var(--topbar-h) 1fr;
   grid-template-columns: var(--sidebar-w) 1fr;
   grid-template-areas: "topbar topbar" "sidebar map";
-  height: 100vh;
-  width: 100vw;
+  height: 100%;
+  width: 100%;
   overflow: hidden;
 }
 
 /* TOPBAR */
 #topbar {
   grid-area: topbar;
+
   display: flex;
   align-items: center;
   gap: 16px;
@@ -191,6 +194,7 @@ h3,
 /* SIDEBAR */
 #sidebar {
   grid-area: sidebar;
+
   background: var(--ss-navy);
   display: flex;
   flex-direction: column;
@@ -680,6 +684,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 /* MAP */
 #map {
   grid-area: map;
+
   height: 100%;
   width: 100%;
   background: var(--ss-black);
@@ -2003,4 +2008,923 @@ a.leaflet-popup-close-button {
   width: 14px;
   height: 14px;
   cursor: pointer;
+}
+
+/* =====================================================================
+   NAV RAIL
+   ===================================================================== */
+#nav-rail {
+  position: fixed;
+  left: 0; top: 0; bottom: 0;
+  width: var(--nav-w);
+  background: var(--ss-black);
+  border-right: 1px solid var(--ss-orange);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+  z-index: 3000;
+}
+
+.nav-logo {
+  width: 100%;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid rgba(244, 87, 0, 0.3);
+  margin-bottom: 8px;
+}
+
+.nav-skull {
+  font-size: 22px;
+  color: var(--ss-orange);
+}
+
+.nav-btn {
+  width: 44px;
+  height: 52px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: rgba(255,255,255,0.35);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  transition: all var(--t);
+  padding: 0;
+}
+
+.nav-btn svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.nav-btn span {
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 8px;
+  letter-spacing: 1px;
+  line-height: 1;
+}
+
+.nav-btn:hover {
+  color: var(--ss-orange);
+  border-color: rgba(244, 87, 0, 0.3);
+  background: rgba(244, 87, 0, 0.06);
+}
+
+.nav-btn.active {
+  color: var(--ss-orange);
+  border-color: var(--ss-orange);
+  background: rgba(244, 87, 0, 0.12);
+}
+
+.nav-bottom {
+  margin-top: auto;
+  padding-bottom: 8px;
+}
+
+.nav-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ss-orange);
+  animation: blink 1.3s infinite;
+}
+
+.nav-status-dot.online  { background: #3fb950; }
+.nav-status-dot.offline { background: var(--ss-red); animation: none; }
+
+/* =====================================================================
+   VIEW SYSTEM — base rules + ops overrides
+   ===================================================================== */
+.view {
+  position: fixed;
+  inset: 0 0 0 var(--nav-w);
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.view.view-active {
+  display: flex;
+}
+
+/* Ops view uses a nested grid, not flex */
+#view-ops {
+  display: none;
+}
+#view-ops.view-active {
+  display: block;
+  position: fixed;
+  inset: 0 0 0 var(--nav-w);
+}
+
+#ops-layout {
+  height: 100%;
+  width: 100%;
+}
+
+/* Floating ops controls must stay inside the view, not the document body */
+#view-ops #search-btn,
+#view-ops #hex-mode-btn,
+#view-ops #hex-search-btn,
+#view-ops #area-warn {
+  position: absolute;
+}
+
+/* Stats bar in ops view */
+#view-ops .stats-bar {
+  left: var(--sidebar-w);
+}
+
+/* =====================================================================
+   SHARED VIEW HEADER
+   ===================================================================== */
+.view-header {
+  height: var(--topbar-h);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px;
+  background: var(--ss-black);
+  border-bottom: 2px solid var(--ss-orange);
+  flex-shrink: 0;
+}
+
+.vh-title {
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 22px;
+  letter-spacing: 3px;
+  color: var(--ss-orange);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.vh-icon {
+  opacity: 0.6;
+}
+
+.vh-sub {
+  font-size: 11px;
+  color: var(--ss-w40);
+  white-space: nowrap;
+}
+
+.vh-spacer { flex: 1; }
+
+.vh-search {
+  background: var(--ss-black);
+  border: 1px solid var(--ss-orange);
+  color: var(--ss-white);
+  font-family: "Montserrat", sans-serif;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 2px;
+  width: 240px;
+}
+
+.vh-select {
+  background: var(--ss-black);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: var(--ss-white);
+  font-family: "Montserrat", sans-serif;
+  font-size: 11px;
+  padding: 6px 8px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.vh-run-btn {
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 14px;
+  letter-spacing: 1.5px;
+  padding: 6px 16px;
+  background: var(--ss-orange);
+  color: var(--ss-black);
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--t);
+}
+
+.vh-run-btn:hover { background: var(--ss-orange-dark); }
+
+.vh-date-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vh-date-label {
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: var(--ss-orange);
+}
+
+.vh-date-input {
+  background: var(--ss-black);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: var(--ss-white);
+  font-family: "Montserrat", sans-serif;
+  font-size: 11px;
+  padding: 5px 7px;
+  border-radius: 2px;
+}
+
+.vh-date-input::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.5;
+}
+
+/* =====================================================================
+   QUICK FILTER STRIP (OPS SIDEBAR)
+   ===================================================================== */
+.qf-strip {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.qf-btn {
+  width: 32px;
+  height: 28px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: transparent;
+  border-radius: 3px;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--t);
+  color: var(--ss-w60);
+}
+
+.qf-btn:hover { border-color: var(--ss-orange); }
+
+.qf-btn.active {
+  border-color: var(--ss-orange);
+  background: var(--ss-orange-15);
+}
+
+/* =====================================================================
+   VIEW 2 — FLEET REGISTRY
+   ===================================================================== */
+.fleet-layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  overflow: hidden;
+}
+
+.fleet-table-pane {
+  overflow-y: auto;
+  border-right: 1px solid rgba(255,255,255,0.08);
+}
+
+.fleet-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.fleet-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--ss-navy);
+}
+
+.fleet-table th {
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: var(--ss-orange);
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--ss-orange);
+  white-space: nowrap;
+}
+
+.fleet-table th.col-score {
+  text-align: right;
+}
+
+.fleet-table td {
+  padding: 9px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  color: var(--ss-w70);
+  vertical-align: middle;
+}
+
+.fleet-table tbody tr {
+  cursor: pointer;
+  transition: background var(--t);
+}
+
+.fleet-table tbody tr:hover {
+  background: rgba(244, 87, 0, 0.06);
+}
+
+.fleet-table tbody tr.selected {
+  background: rgba(244, 87, 0, 0.12);
+  border-left: 2px solid var(--ss-orange);
+}
+
+.ft-name {
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 15px;
+  letter-spacing: 0.5px;
+  color: var(--ss-white);
+}
+
+.ft-mmsi {
+  font-family: "Montserrat", monospace;
+  font-size: 11px;
+  color: var(--ss-w60);
+}
+
+.ft-score {
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 18px;
+  text-align: right;
+}
+
+.ft-score.hi  { color: var(--ss-orange); }
+.ft-score.mid { color: var(--ss-amber); }
+.ft-score.lo  { color: var(--ss-blue); }
+
+.ft-status-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  padding: 2px 6px;
+  border-radius: 2px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ft-status-badge.mpa {
+  background: rgba(255,16,83,0.2);
+  border: 1px solid rgba(255,16,83,0.5);
+  color: var(--ss-red);
+}
+
+.ft-status-badge.dark {
+  background: rgba(50,214,255,0.1);
+  border: 1px solid rgba(50,214,255,0.3);
+  color: var(--ss-cyan);
+}
+
+.ft-status-badge.iuu {
+  background: rgba(244,87,0,0.2);
+  border: 1px solid var(--ss-orange);
+  color: var(--ss-orange);
+}
+
+.fleet-empty {
+  text-align: center;
+  color: var(--ss-w40);
+  padding: 40px;
+  font-size: 12px;
+}
+
+/* Dossier pane */
+.fleet-dossier-pane {
+  background: var(--ss-navy);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.dossier-placeholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 40px;
+  color: var(--ss-w40);
+}
+
+.dp-placeholder-icon {
+  font-size: 48px;
+  opacity: 0.2;
+}
+
+.dp-placeholder-text {
+  font-size: 12px;
+  text-align: center;
+  line-height: 1.6;
+}
+
+/* =====================================================================
+   VIEW 3 — SPATIAL ANALYTICS
+   ===================================================================== */
+.analytics-layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  overflow: hidden;
+}
+
+.analytics-map-col {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  border-right: 1px solid rgba(255,255,255,0.08);
+}
+
+#analytics-map {
+  flex: 1;
+  background: var(--ss-black);
+}
+
+/* Playback bar */
+.playback-bar {
+  height: 64px;
+  background: rgba(13,27,42,0.95);
+  border-top: 1px solid rgba(50,214,255,0.2);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+
+.pb-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.pb-btn {
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: 1px solid rgba(50,214,255,0.4);
+  color: var(--ss-cyan);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--t);
+}
+
+.pb-btn:hover:not(:disabled) {
+  background: rgba(50,214,255,0.12);
+}
+
+.pb-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.pb-label {
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 14px;
+  letter-spacing: 1px;
+  color: var(--ss-cyan);
+  min-width: 120px;
+}
+
+.pb-slider {
+  flex: 1;
+  accent-color: var(--ss-cyan);
+  cursor: pointer;
+  height: 4px;
+}
+
+.pb-speed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.pb-speed-label {
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--ss-w40);
+}
+
+.pb-speed-select {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.15);
+  color: var(--ss-white);
+  font-size: 11px;
+  padding: 3px 6px;
+  border-radius: 2px;
+}
+
+/* Analytics panels column */
+.analytics-panels-col {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.ap-card {
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+
+.ap-card--tall { flex: 1; }
+
+.ap-card-title {
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--ss-orange);
+  padding: 10px 16px 6px;
+  border-bottom: 1px solid rgba(244,87,0,0.2);
+}
+
+.ap-card-body {
+  padding: 10px 16px;
+}
+
+.ap-empty {
+  font-size: 11px;
+  color: var(--ss-w40);
+  padding: 12px 0;
+  text-align: center;
+}
+
+/* MPA dwell rows */
+.ap-dwell-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 11px;
+}
+
+.ap-dwell-name {
+  flex: 1;
+  color: var(--ss-white);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ap-dwell-bar-wrap {
+  width: 80px;
+  height: 6px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.ap-dwell-bar {
+  height: 100%;
+  background: var(--ss-red);
+  border-radius: 3px;
+}
+
+.ap-dwell-hrs {
+  color: var(--ss-w60);
+  min-width: 38px;
+  text-align: right;
+  font-size: 10px;
+}
+
+/* Encounter matrix */
+.enc-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 11px;
+}
+
+.enc-vessel {
+  color: var(--ss-white);
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.enc-vessel.right { text-align: right; }
+
+.enc-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.enc-type-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  padding: 2px 7px;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+
+.enc-type-badge.transship {
+  background: rgba(255,16,83,0.2);
+  border: 1px solid rgba(255,16,83,0.5);
+  color: var(--ss-red);
+}
+
+.enc-type-badge.bunkering {
+  background: rgba(255,170,0,0.12);
+  border: 1px solid rgba(255,170,0,0.4);
+  color: var(--ss-amber);
+}
+
+.enc-type-badge.proximity {
+  background: rgba(50,214,255,0.08);
+  border: 1px solid rgba(50,214,255,0.25);
+  color: var(--ss-cyan);
+}
+
+.enc-date {
+  color: var(--ss-w40);
+  font-size: 9px;
+}
+
+/* =====================================================================
+   VIEW 4 — GOVERNANCE
+   ===================================================================== */
+.governance-layout {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.gov-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.gov-section-title {
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 13px;
+  letter-spacing: 2.5px;
+  color: var(--ss-orange);
+  border-bottom: 1px solid rgba(244,87,0,0.2);
+  padding-bottom: 6px;
+}
+
+/* Health cards grid */
+.gov-health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.ghc {
+  background: var(--ss-navy);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color var(--t);
+}
+
+.ghc-loading {
+  opacity: 0.4;
+}
+
+.ghc.healthy { border-left: 3px solid #3fb950; }
+.ghc.degraded { border-left: 3px solid var(--ss-amber); }
+.ghc.down { border-left: 3px solid var(--ss-red); }
+.ghc.unknown { border-left: 3px solid rgba(255,255,255,0.2); }
+
+.ghc-name {
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 13px;
+  letter-spacing: 1.5px;
+  color: var(--ss-white);
+}
+
+.ghc-status {
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ghc-status .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ghc.healthy .dot  { background: #3fb950; }
+.ghc.degraded .dot { background: var(--ss-amber); }
+.ghc.down .dot     { background: var(--ss-red); animation: blink 0.8s infinite; }
+.ghc.unknown .dot  { background: rgba(255,255,255,0.3); }
+
+.ghc.healthy  .ghc-status { color: #3fb950; }
+.ghc.degraded .ghc-status { color: var(--ss-amber); }
+.ghc.down     .ghc-status { color: var(--ss-red); }
+.ghc.unknown  .ghc-status { color: var(--ss-w40); }
+
+.ghc-metric {
+  font-size: 10px;
+  color: var(--ss-w40);
+  margin-top: 2px;
+}
+
+/* Row 2: rules + telemetry side by side */
+.gov-row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+/* Rule engine list */
+.gov-rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gov-rule-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--ss-navy);
+  border-radius: 3px;
+  border-left: 3px solid transparent;
+}
+
+.gov-rule-row.tier1 { border-left-color: var(--ss-red); }
+.gov-rule-row.tier2 { border-left-color: var(--ss-amber); }
+.gov-rule-row.tier3 { border-left-color: #9e6a03; }
+
+.gov-rule-name {
+  font-size: 12px;
+  color: var(--ss-white);
+  font-family: "Montserrat", monospace;
+}
+
+.gov-rule-tier {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  padding: 2px 6px;
+  border-radius: 2px;
+  text-transform: uppercase;
+}
+
+.gov-rule-tier.t1 {
+  background: rgba(255,16,83,0.15);
+  color: var(--ss-red);
+}
+
+.gov-rule-tier.t2 {
+  background: rgba(255,170,0,0.12);
+  color: var(--ss-amber);
+}
+
+.gov-rule-tier.t3 {
+  background: rgba(158,106,3,0.15);
+  color: #c89030;
+}
+
+.gov-rule-toggle {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.gov-rule-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.gov-rule-toggle-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 9px;
+  background: rgba(255,255,255,0.12);
+  cursor: pointer;
+  transition: background var(--t);
+}
+
+.gov-rule-toggle input:checked + .gov-rule-toggle-track {
+  background: #3fb950;
+}
+
+.gov-rule-toggle-track::before {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: white;
+  top: 3px;
+  left: 3px;
+  transition: transform var(--t);
+}
+
+.gov-rule-toggle input:checked + .gov-rule-toggle-track::before {
+  transform: translateX(14px);
+}
+
+/* Telemetry */
+.gov-telemetry {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.gov-telem-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.gov-telem-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.gov-telem-label {
+  font-size: 11px;
+  color: var(--ss-w60);
+}
+
+.gov-telem-value {
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 14px;
+  color: var(--ss-white);
+}
+
+.gov-telem-bar-wrap {
+  height: 6px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.gov-telem-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 600ms ease;
+}
+
+.gov-telem-bar.ok      { background: #3fb950; }
+.gov-telem-bar.warn    { background: var(--ss-amber); }
+.gov-telem-bar.danger  { background: var(--ss-red); }
+
+/* =====================================================================
+   MOBILE — keep working at ≤768px
+   ===================================================================== */
+@media (max-width: 768px) {
+  :root { --nav-w: 0px; }
+  #nav-rail { display: none; }
+  .view { inset: 0; }
+  #view-ops { inset: 0; }
+
+  .fleet-layout { grid-template-columns: 1fr; }
+  .fleet-dossier-pane { display: none; }
+  .analytics-layout { grid-template-columns: 1fr; }
+  .analytics-panels-col { display: none; }
+  .gov-row2 { grid-template-columns: 1fr; }
+
+  .vh-sub { display: none; }
+  .vh-search { width: 140px; }
 }

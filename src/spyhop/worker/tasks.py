@@ -30,9 +30,11 @@ from sqlalchemy.orm import sessionmaker
 from spyhop.config import get_settings
 from spyhop.db.models import (
     EnvironmentRaster,
+    H3RiskCorridor,
     IUUBlacklist,
     SanctionedVessel,
     VesselPosition,
+    VesselPositionSnapshot,
     VesselTrack,
 )
 from spyhop.worker.celery_app import celery_app
@@ -469,23 +471,26 @@ def _replace_sanctioned_vessels_sync(
 
 
 def _insert_tracks_sync(rows: list[dict[str, Any]]) -> None:
-    """Bulk-insert ping rows into vessel_tracks (no upsert — append-only)."""
+    """Bulk-insert ping rows into vessel_tracks in ONE round-trip.
+
+    Uses a single ``INSERT ... VALUES (…), (…), …`` instead of N individual
+    statements. vessel_tracks is append-only so there is no ON CONFLICT clause.
+    """
     if not rows:
         return
+    values = [
+        {
+            "mmsi":      row["mmsi"],
+            "position":  func.ST_SetSRID(func.ST_Point(row["lon"], row["lat"]), 4326),
+            "sog":       row["sog"],
+            "cog":       row.get("cog", 0.0),
+            "timestamp": row["timestamp"],
+            "source":    row.get("source", "unknown"),
+        }
+        for row in rows
+    ]
     with SyncSession() as session:
-        for row in rows:
-            lat = row["lat"]
-            lon = row["lon"]
-            session.execute(
-                pg_insert(VesselTrack).values(
-                    mmsi=row["mmsi"],
-                    position=func.ST_SetSRID(func.ST_Point(lon, lat), 4326),
-                    sog=row["sog"],
-                    cog=row.get("cog", 0.0),
-                    timestamp=row["timestamp"],
-                    source=row.get("source", "unknown"),
-                )
-            )
+        session.execute(pg_insert(VesselTrack).values(values))
         session.commit()
 
 
@@ -1065,13 +1070,12 @@ def _enrich_vessel_profiles_sync(
     if not vessels:
         return {}
 
-    redis_client = sync_redis_lib.from_url(settings.REDIS_URL, decode_responses=True)
     result: dict[str, Any] = {}
     miss_mmsi: list[str] = []
 
     for v in vessels:
         key = f"vessel_profile:{v.mmsi}"
-        cached = redis_client.get(key)
+        cached = _sync_redis.get(key)
         if cached:
             profile = ujson.loads(cached)
             result[v.mmsi] = profile
@@ -1095,7 +1099,7 @@ def _enrich_vessel_profiles_sync(
                 "historical_risk": float(row.risk_score),
             }
             key = f"vessel_profile:{row.mmsi}"
-            redis_client.setex(
+            _sync_redis.setex(
                 key,
                 86400 * 30,   # 30-day TTL (PROFILE_CACHE_TTL_S)
                 ujson.dumps(profile),
@@ -1210,3 +1214,326 @@ def compute_h3_context() -> dict[str, Any]:
         len(cell_ids), n_weather, n_species,
     )
     return {"status": "ok", "cells": len(cell_ids)}
+
+
+# ---------------------------------------------------------------------------
+# Task: snapshot_vessel_positions  (hourly)
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(
+    name="spyhop.worker.tasks.snapshot_vessel_positions",
+    soft_time_limit=120,
+    time_limit=180,
+)
+def snapshot_vessel_positions() -> dict[str, Any]:
+    """Append current vessel_positions into vessel_position_snapshots.
+
+    Runs hourly.  The h3_index_5 column is computed here in Python so the
+    analytics endpoints never have to call h3_to_parent at query time.
+    Vessels with no h3_index (position not yet geocoded) are skipped.
+    """
+    snapped_at = datetime.now(timezone.utc)
+    rows: list[dict[str, Any]] = []
+
+    with SyncSession() as session:
+        vessels = session.execute(
+            select(VesselPosition).where(VesselPosition.h3_index.isnot(None))
+        ).scalars().all()
+
+        for v in vessels:
+            rows.append({
+                "mmsi": v.mmsi,
+                "h3_index_7": v.h3_index,
+                "h3_index_5": h3.h3_to_parent(v.h3_index, 5),
+                "risk_score": v.risk_score,
+                "flag": v.flag,
+                "vessel_type": v.vessel_type,
+                "ais_gap_hours": v.ais_gap_hours,
+                "loitering_hours": v.loitering_hours,
+                "in_protected_area": v.in_protected_area,
+                "rendezvous_duration_hours": v.rendezvous_duration_hours,
+                "spoofing_flag": v.spoofing_flag,
+                "snapped_at": snapped_at,
+            })
+        session.bulk_insert_mappings(VesselPositionSnapshot, rows)
+        session.commit()
+
+    log.info("snapshot_vessel_positions inserted=%d snapped_at=%s", len(rows), snapped_at.isoformat())
+    return {"inserted": len(rows), "snapped_at": snapped_at.isoformat()}
+
+
+# ---------------------------------------------------------------------------
+# Task: materialize_h3_corridors  (weekly, Sunday 01:00 UTC)
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(
+    name="spyhop.worker.tasks.materialize_h3_corridors",
+    soft_time_limit=600,
+    time_limit=720,
+)
+def materialize_h3_corridors() -> dict[str, Any]:
+    """Aggregate the past week of snapshots into h3_risk_corridors.
+
+    Groups vessel_position_snapshots by h3_index_5 for the rolling 7-day
+    window ending now.  Per-MMSI peak values are used so a vessel observed
+    multiple times in a cell is counted once.
+
+    corridor_score = (high_risk*3 + med_risk + dark*2 + rendezvous*2.5 + mpa*2)
+                     × sqrt(persistence_weeks)
+
+    The sqrt dampening prevents a single very active week from dominating;
+    persistence (recurring across many weeks) is the structural corridor signal.
+    """
+    from collections import Counter  # noqa: PLC0415
+
+    now = datetime.now(timezone.utc)
+    # ISO week starts on Monday
+    days_since_monday = now.weekday()
+    week_start = (now - timedelta(days=days_since_monday)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    window_start = week_start - timedelta(days=7)
+
+    with SyncSession() as session:
+        snap_rows = session.execute(
+            select(VesselPositionSnapshot).where(
+                VesselPositionSnapshot.snapped_at >= window_start,
+                VesselPositionSnapshot.h3_index_5.isnot(None),
+            )
+        ).scalars().all()
+
+        by_cell: dict[str, list] = defaultdict(list)
+        for row in snap_rows:
+            by_cell[row.h3_index_5].append(row)
+
+        upserted = 0
+        for cell, cell_rows in by_cell.items():
+            # Collapse to per-MMSI peak — avoid inflating counts for vessels
+            # seen in multiple hourly snapshots within the same cell.
+            mmsi_peak: dict[str, float] = {}
+            mmsi_flag: dict[str, str] = {}
+            mmsi_type: dict[str, str] = {}
+            mmsi_dark: dict[str, bool] = {}
+            mmsi_rvz: dict[str, bool] = {}
+            mmsi_mpa: dict[str, bool] = {}
+
+            for r in cell_rows:
+                if r.risk_score > mmsi_peak.get(r.mmsi, -1.0):
+                    mmsi_peak[r.mmsi] = r.risk_score
+                    mmsi_flag[r.mmsi] = r.flag
+                    mmsi_type[r.mmsi] = r.vessel_type
+                mmsi_dark[r.mmsi] = mmsi_dark.get(r.mmsi, False) or (r.ais_gap_hours >= 6.0)
+                mmsi_rvz[r.mmsi] = mmsi_rvz.get(r.mmsi, False) or (r.rendezvous_duration_hours > 0)
+                mmsi_mpa[r.mmsi] = mmsi_mpa.get(r.mmsi, False) or r.in_protected_area
+
+            scores = list(mmsi_peak.values())
+            n = len(scores)
+            high_risk = sum(1 for s in scores if s >= 70.0)
+            med_risk = sum(1 for s in scores if 40.0 <= s < 70.0)
+            dark_count = sum(1 for v in mmsi_dark.values() if v)
+            rvz_count = sum(1 for v in mmsi_rvz.values() if v)
+            mpa_count = sum(1 for v in mmsi_mpa.values() if v)
+            avg_score = sum(scores) / n if n else 0.0
+            max_score = max(scores) if scores else 0.0
+            dom_flag = Counter(mmsi_flag.values()).most_common(1)[0][0] if mmsi_flag else None
+            dom_type = Counter(mmsi_type.values()).most_common(1)[0][0] if mmsi_type else None
+
+            # Persistence: distinct ISO weeks in full snapshot history where
+            # this cell had at least one high-risk vessel.
+            persistence = session.execute(
+                text(
+                    """
+                    SELECT COUNT(DISTINCT date_trunc('week', snapped_at))
+                    FROM vessel_position_snapshots
+                    WHERE h3_index_5 = :cell AND risk_score >= 70
+                    """
+                ),
+                {"cell": cell},
+            ).scalar() or 1
+
+            corridor_score = (
+                high_risk * 3.0
+                + med_risk * 1.0
+                + dark_count * 2.0
+                + rvz_count * 2.5
+                + mpa_count * 2.0
+            ) * (persistence ** 0.5)
+
+            stmt = pg_insert(H3RiskCorridor).values(
+                h3_cell=cell,
+                week_start=week_start.date(),
+                vessel_count=n,
+                high_risk_count=high_risk,
+                med_risk_count=med_risk,
+                dark_vessel_count=dark_count,
+                rendezvous_count=rvz_count,
+                mpa_incursion_count=mpa_count,
+                avg_risk_score=avg_score,
+                max_risk_score=max_score,
+                dominant_flag=dom_flag,
+                dominant_vessel_type=dom_type,
+                persistence_weeks=int(persistence),
+                corridor_score=corridor_score,
+                materialized_at=now,
+            ).on_conflict_do_update(
+                constraint="pk_h3_risk_corridors",
+                set_={
+                    "vessel_count": n,
+                    "high_risk_count": high_risk,
+                    "med_risk_count": med_risk,
+                    "dark_vessel_count": dark_count,
+                    "rendezvous_count": rvz_count,
+                    "mpa_incursion_count": mpa_count,
+                    "avg_risk_score": avg_score,
+                    "max_risk_score": max_score,
+                    "dominant_flag": dom_flag,
+                    "dominant_vessel_type": dom_type,
+                    "persistence_weeks": int(persistence),
+                    "corridor_score": corridor_score,
+                    "materialized_at": now,
+                },
+            )
+            session.execute(stmt)
+            upserted += 1
+
+        session.commit()
+
+    log.info("materialize_h3_corridors cells=%d week=%s", upserted, week_start.date())
+    return {"cells_upserted": upserted, "week_start": str(week_start.date())}
+
+
+# ---------------------------------------------------------------------------
+# Task: prune_vessel_snapshots  (daily)
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(
+    name="spyhop.worker.tasks.prune_vessel_snapshots",
+    soft_time_limit=60,
+    time_limit=90,
+)
+def prune_vessel_snapshots(retain_days: int = 90) -> dict[str, Any]:
+    """Delete vessel_position_snapshots older than retain_days (default 90).
+
+    At ~1 000 vessels × 24 snapshots/day, 90 days ≈ 2.2 M rows — small enough
+    that a simple DELETE with a timestamped index scan completes in seconds.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retain_days)
+    with SyncSession() as session:
+        result = session.execute(
+            text("DELETE FROM vessel_position_snapshots WHERE snapped_at < :cutoff"),
+            {"cutoff": cutoff},
+        )
+        session.commit()
+        deleted = result.rowcount
+    log.info("prune_vessel_snapshots deleted=%d retain_days=%d", deleted, retain_days)
+    return {"status": "ok", "deleted": deleted}
+
+
+# ---------------------------------------------------------------------------
+# Task: refresh_ecological_masks  (nightly)
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(
+    name="spyhop.worker.tasks.refresh_ecological_masks",
+    soft_time_limit=300,
+    time_limit=360,
+)
+def refresh_ecological_masks() -> dict[str, Any]:
+    """Pre-materialise ecological risk masks for every active H3 res-7 cell.
+
+    Runs nightly at 00:15 UTC. For each active cetacean corridor and spawning
+    ground, computes the set of H3 res-7 cells that overlap the bounding box
+    and writes a compact JSON blob to Redis (key ``eco:h3:{cell}``, TTL 26 h).
+
+    The spatial worker reads these keys in its hot path (one HGETALL per
+    unique cell per batch) so the brain can evaluate ecological rules without
+    any PostGIS or external-API calls on the critical path.
+
+    Redis schema per cell::
+
+        eco:h3:{cell} → HASH {
+            "corridors":    '[{"id":…,"label":…,"species":[…],"peak":0.72}]',
+            "spawning":     '[{"id":…,"label":…,"species":[…],"peak":true}]',
+            "max_endanger": "0.9",   # max endangerment_weight of active corridors
+        }
+    """
+    from h3 import LatLngPoly, h3shape_to_cells  # noqa: PLC0415
+
+    from spyhop.analytics.ecological import (  # noqa: PLC0415
+        active_corridors,
+        active_spawning_grounds,
+    )
+
+    today = datetime.now(timezone.utc).date()
+    corridors = active_corridors(today)
+    grounds   = active_spawning_grounds(today)
+
+    log.info(
+        "refresh_ecological_masks date=%s active_corridors=%d active_spawning=%d",
+        today, len(corridors), len(grounds),
+    )
+
+    # Build cell → payload map
+    cell_corridors: dict[str, list[dict]] = defaultdict(list)
+    cell_spawning:  dict[str, list[dict]] = defaultdict(list)
+
+    for corridor in corridors:
+        peak = corridor.season.peak_fraction(today)
+        poly = LatLngPoly([
+            (corridor.north, corridor.west),
+            (corridor.north, corridor.east),
+            (corridor.south, corridor.east),
+            (corridor.south, corridor.west),
+        ])
+        for cell in h3shape_to_cells(poly, 7):
+            cell_corridors[cell].append({
+                "id":      corridor.id,
+                "label":   corridor.label,
+                "species": list(corridor.species),
+                "peak":    round(peak, 4),
+                "endanger": corridor.endangerment_weight,
+            })
+
+    for ground in grounds:
+        poly = LatLngPoly([
+            (ground.north, ground.west),
+            (ground.north, ground.east),
+            (ground.south, ground.east),
+            (ground.south, ground.west),
+        ])
+        for cell in h3shape_to_cells(poly, 7):
+            cell_spawning[cell].append({
+                "id":      ground.id,
+                "label":   ground.label,
+                "species": list(ground.species),
+            })
+
+    all_cells = set(cell_corridors) | set(cell_spawning)
+    ttl = 26 * 3600   # 26 h — survives until next nightly refresh
+
+    pipe = _sync_redis.pipeline(transaction=False)
+    for cell in all_cells:
+        cors = cell_corridors.get(cell, [])
+        spwn = cell_spawning.get(cell, [])
+        max_endanger = max((c["endanger"] for c in cors), default=0.0)
+        key = f"eco:h3:{cell}"
+        pipe.hset(key, mapping={
+            "corridors":    ujson.dumps(cors),
+            "spawning":     ujson.dumps(spwn),
+            "max_endanger": str(max_endanger),
+        })
+        pipe.expire(key, ttl)
+    pipe.execute()
+
+    log.info("refresh_ecological_masks cells_written=%d", len(all_cells))
+    return {
+        "status":         "ok",
+        "date":           str(today),
+        "cells_written":  len(all_cells),
+        "corridors_active": len(corridors),
+        "spawning_active":  len(grounds),
+    }

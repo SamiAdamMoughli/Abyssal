@@ -1,0 +1,89 @@
+# =============================================================================
+# docker-compose.override.yml — DEV overrides
+#
+# Automatically merged by `docker compose up` (no -f flag needed).
+# Adds:
+#   - Source bind-mounts so code changes reflect without rebuilds
+#   - Uvicorn --reload on all API services
+#   - Relaxed resource limits (no cap)
+#   - Flower and brain-api always on (no profile gate)
+#   - Postgres exposed on host for psql / GUI tools
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Infrastructure
+  # ---------------------------------------------------------------------------
+  vesselx-core-db:
+    ports:
+      - "5432:5432"
+
+  vesselx-telemetry-cache:
+    ports:
+      - "6379:6379"
+
+  # ---------------------------------------------------------------------------
+  # API services — hot reload
+  # ---------------------------------------------------------------------------
+  vesselx-spatial-engine:
+    command: >
+      uvicorn vesselx.spatial_engine.app:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
+      --log-level debug
+    volumes:
+      - ./src:/app/src
+      - ./backend:/app/backend
+
+  vesselx-analytics-engine:
+    command: >
+      uvicorn vesselx.analytics_engine.app:app
+      --host 0.0.0.0
+      --port 8001
+      --reload
+      --log-level debug
+    volumes:
+      - ./src:/app/src
+      - ./backend:/app/backend
+
+  vesselx-brain-api:
+    command: >
+      uvicorn vesselx.brain.app:app
+      --host 0.0.0.0
+      --port 8020
+      --reload
+      --log-level debug
+    profiles: []
+    volumes:
+      - ./src:/app/src
+      - ./backend:/app/backend
+
+  # ---------------------------------------------------------------------------
+  # Workers — bind-mount so edited tasks are picked up on restart
+  # ---------------------------------------------------------------------------
+  vesselx-brain:
+    command: >
+      celery -A spyhop.worker.celery_app worker
+      --loglevel=debug
+      --concurrency=2
+      --queues=default,scoring,sync
+    volumes:
+      - ./src:/app/src
+      - ./backend:/app/backend
+
+  vesselx-sync-worker:
+    volumes:
+      - ./src:/app/src
+      - ./backend:/app/backend
+
+  vesselx-spatial-worker:
+    volumes:
+      - ./src:/app/src
+      - ./backend:/app/backend
+
+  # ---------------------------------------------------------------------------
+  # Ops tooling — always available in dev (no profile gate)
+  # ---------------------------------------------------------------------------
+  vesselx-ops-flower:
+    profiles: []

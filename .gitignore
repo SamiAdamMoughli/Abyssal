@@ -23,6 +23,9 @@ venv/
 frontend-vite/.env.local
 frontend-vite/.env.production
 
+# Celery schedule (runtime artifact)
+celerybeat-schedule
+
 # Vite build output
 frontend-vite/dist/
 frontend-vite/node_modules/
@@ -30,3 +33,4 @@ frontend-vite/node_modules/
 # Generierter Quellen-Cache (regenerierbar via refresh_sources)
 backend/data/cache/*
 !backend/data/cache/opensanctions_vessels.json
+.vercel

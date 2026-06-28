@@ -12,8 +12,21 @@ import {
   hasSelection,
 } from "./h3grid.js";
 import { initAlerts } from "./alerts.js";
-import { toggleHeatmap, toggleWeather, refreshStatsBar } from "./overlays.js";
+import { toggleHeatmap, toggleWeather, toggleCorridors, toggleDarkGaps, refreshStatsBar } from "./overlays.js";
 import { initAuth } from "./auth.js";
+import { initNav } from "./nav.js";
+import { initFleet } from "./views/fleet.js";
+import { initAnalytics } from "./views/analytics.js";
+import { initGovernance } from "./views/governance.js";
+
+// ==================================================================
+// NAV RAIL — init first so view state is set before anything renders
+// ==================================================================
+state.activeView = 'ops';
+initNav();
+initFleet();
+initAnalytics();
+initGovernance();
 
 // ==================================================================
 // MAP INIT
@@ -259,6 +272,18 @@ state.map.on("moveend", () => {
   initAuth();
   await refreshStatsBar();
 
+  // Nav rail status dot — reflects WebSocket connection state
+  _updateNavDot();
+  setInterval(_updateNavDot, 5000);
+
+  // Quick filter strip wiring (ops sidebar)
+  document.getElementById("qf-strip")?.addEventListener("click", (e) => {
+    const btn = e.target.closest(".qf-btn");
+    if (!btn) return;
+    btn.classList.toggle("active");
+    _applyQuickFilters();
+  });
+
   // Overlay toggle wiring
   document.getElementById("overlay-heatmap")?.addEventListener("change", (e) => {
     toggleHeatmap(e.target.checked);
@@ -266,4 +291,30 @@ state.map.on("moveend", () => {
   document.getElementById("overlay-weather")?.addEventListener("change", (e) => {
     toggleWeather(e.target.checked);
   });
+  document.getElementById("overlay-corridors")?.addEventListener("change", (e) => {
+    toggleCorridors(e.target.checked);
+  });
+  document.getElementById("overlay-dark-gaps")?.addEventListener("change", (e) => {
+    toggleDarkGaps(e.target.checked);
+  });
 })();
+
+// ==================================================================
+// QUICK FILTER HELPERS
+// ==================================================================
+function _applyQuickFilters() {
+  const active = [...document.querySelectorAll(".qf-btn.active")].map(b => b.dataset.qf);
+  state._quickFilters = active;
+  renderCards();
+}
+
+// ==================================================================
+// NAV RAIL STATUS DOT
+// ==================================================================
+function _updateNavDot() {
+  const dot = document.getElementById("nav-status-dot");
+  if (!dot) return;
+  const wsOk = state.alertsSocket?.readyState === WebSocket.OPEN;
+  dot.className = "nav-status-dot " + (wsOk ? "online" : "offline");
+  dot.title = wsOk ? "All systems connected" : "WebSocket disconnected";
+}

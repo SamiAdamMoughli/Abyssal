@@ -1,0 +1,23 @@
+# =============================================================================
+# Railway service: vesselx-brain  (Celery worker)
+# Role: Async task execution — scoring, enrichment, sync queue consumer.
+# Exposed: no port
+# =============================================================================
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = """
+  celery -A spyhop.worker.celery_app worker \
+    --loglevel=info \
+    --concurrency=4 \
+    --queues=default,scoring,sync
+"""
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[deploy.envVars]
+PYTHONPATH = "/app/src:/app"
+PYTHONUNBUFFERED = "1"

@@ -108,6 +108,7 @@ export async function loadData(params) {
     syncMarkers(vData.vessels);
 
     state.vesselsCache = vData.vessels;
+    state._lastFetch = Date.now();
     renderCards();
     updateVesselCounts();
     loadMPAs(state.currentParams);

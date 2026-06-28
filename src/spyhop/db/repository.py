@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import Any, Sequence
 
 from geoalchemy2 import Geography
-from geoalchemy2.functions import ST_MakeEnvelope, ST_Within
+from geoalchemy2.functions import ST_MakeEnvelope
 from sqlalchemy import cast, delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,14 +43,17 @@ class VesselRepository:
         max_lon: float,
         max_lat: float,
     ) -> Sequence[VesselPosition]:
-        """ST_Within — returns all vessels inside the given bounding box.
+        """Bounding-box query using the PostGIS && operator.
 
-        Uses the GiST index on ``position`` for sub-10ms performance even
-        with millions of rows. SRID 4326 (WGS-84).
+        For POINT geometries, ``point && envelope`` is semantically identical
+        to ST_Within(point, envelope) but skips the redundant full-geometry
+        recheck that ST_Within performs after the GiST bounding-box filter.
+        The && operator IS what the GiST index implements natively, so this
+        hits the index in one step. SRID 4326 (WGS-84).
         """
         envelope = ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, 4326)
         stmt = select(VesselPosition).where(
-            ST_Within(VesselPosition.position, envelope)
+            VesselPosition.position.op("&&")(envelope)
         )
         result = await self.session.execute(stmt)
         return result.scalars().all()
@@ -226,9 +229,41 @@ class VesselRepository:
     async def upsert_vessels_batch(
         self, vessels: list[dict[str, Any]]
     ) -> None:
-        """Upsert a list of vessel dicts in a single transaction."""
-        for v in vessels:
-            await self.upsert_vessel(v)
+        """Upsert a list of vessel dicts in ONE round-trip.
+
+        Builds a single ``INSERT ... ON CONFLICT DO UPDATE`` with all rows
+        rather than N individual statements. Caller's dicts are not mutated.
+        """
+        if not vessels:
+            return
+
+        now = datetime.now(timezone.utc)
+        values: list[dict[str, Any]] = []
+        for raw in vessels:
+            v = dict(raw)
+            lat = v.pop("lat")
+            lon = v.pop("lon")
+            reasons = v.pop("reasons", [])
+            top_reason_label = v.pop("top_reason_label", None)
+            values.append({
+                "position": func.ST_SetSRID(func.ST_Point(lon, lat), 4326),
+                "reasons_json": reasons,
+                "top_reason_label": top_reason_label,
+                "updated_at": now,
+                **v,
+            })
+
+        stmt = pg_insert(VesselPosition).values(values)
+        update_dict = {
+            col.name: stmt.excluded[col.name]
+            for col in VesselPosition.__table__.columns
+            if col.name not in ("id", "mmsi", "created_at")
+        }
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_vessel_positions_mmsi",
+            set_=update_dict,
+        )
+        await self.session.execute(stmt)
         await self.session.commit()
 
     # -----------------------------------------------------------------------

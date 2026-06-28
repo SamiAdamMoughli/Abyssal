@@ -80,6 +80,14 @@ class VesselXAlert(Base):
         DateTime(timezone=True), nullable=True
     )
 
+    # Tracks ongoing alert lifecycle; written by brain.tasks suppression logic.
+    last_seen_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     triggered_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
