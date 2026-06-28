@@ -97,3 +97,13 @@ export function syncMarkers(vessels) {
     }
   });
 }
+
+export function clearMarkers() {
+  Object.keys(state.markersByMmsi).forEach(mmsi => {
+    const e = state.markersByMmsi[mmsi];
+    state.markerLayer.removeLayer(e.marker);
+    if (e.ring)      state.ringLayer.removeLayer(e.ring);
+    if (e.gapCircle) state.gapLayer.removeLayer(e.gapCircle);
+    delete state.markersByMmsi[mmsi];
+  });
+}

@@ -1507,6 +1507,82 @@ a.leaflet-popup-close-button {
   color: var(--ss-w40);
 }
 
+/* Event detail cards (loitering / gap / encounter) */
+.dp-event-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 3px solid var(--ss-border);
+  border-radius: 2px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+}
+
+.dp-event-card--loiter { border-left-color: var(--ss-amber); }
+.dp-event-card--gap    { border-left-color: var(--ss-red);   }
+.dp-event-card--enc    { border-left-color: var(--ss-teal);  }
+
+.dp-event-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+
+.dp-event-type {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: var(--ss-muted);
+}
+
+.dp-event-card--loiter .dp-event-type { color: var(--ss-amber); }
+.dp-event-card--gap    .dp-event-type { color: var(--ss-red);   }
+.dp-event-card--enc    .dp-event-type { color: var(--ss-teal);  }
+
+.dp-event-dur {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ss-white);
+}
+
+.dp-event-dates {
+  font-size: 11px;
+  color: var(--ss-muted);
+  margin-bottom: 3px;
+}
+
+.dp-event-pos,
+.dp-event-meta {
+  font-size: 11px;
+  color: var(--ss-w60);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dp-fly-btn {
+  background: rgba(243, 156, 18, 0.12);
+  border: 1px solid var(--ss-amber);
+  color: var(--ss-amber);
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 2px;
+  cursor: pointer;
+  line-height: 1.6;
+}
+
+.dp-fly-btn:hover {
+  background: rgba(243, 156, 18, 0.25);
+}
+
+/* Leaflet tooltip for detail overlay */
+.dp-map-tip {
+  background: var(--ss-navy) !important;
+  border: 1px solid var(--ss-border) !important;
+  color: var(--ss-muted) !important;
+  font-size: 11px !important;
+  box-shadow: none !important;
+}
+
 /* =====================================================================
    BIO-INTELLIGENCE LAYER & ECO OVERLAYS
    ===================================================================== */
@@ -1814,6 +1890,47 @@ a.leaflet-popup-close-button {
   font-size: 10.5px;
   color: var(--ss-w40);
   line-height: 1.4;
+}
+
+.alert-ack-btn {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--ss-w40);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: color var(--t), border-color var(--t), background var(--t);
+}
+
+.alert-ack-btn:hover {
+  color: var(--ss-white);
+  border-color: var(--ss-cyan);
+  background: rgba(50, 214, 255, 0.08);
+}
+
+.alert-acking .alert-ack-btn {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.alert-acked-label {
+  flex-shrink: 0;
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: rgba(50, 214, 255, 0.55);
+}
+
+.alert-acknowledged {
+  opacity: 0.45;
+}
+
+.alert-acknowledged:hover {
+  opacity: 0.75;
 }
 
 /* =====================================================================
@@ -2927,4 +3044,193 @@ a.leaflet-popup-close-button {
 
   .vh-sub { display: none; }
   .vh-search { width: 140px; }
+}
+
+/* =====================================================================
+   PHASE FSM — Global Level-Select & Region Lock UI
+   ===================================================================== */
+
+/* ── Phase 1: global state ─────────────────────────────────────────── */
+
+#map.phase-global {
+  cursor: default;
+}
+
+/* Sidebar hidden in global phase */
+.sidebar.phase-global-hidden {
+  pointer-events: none;
+  opacity: 0.15;
+  transition: opacity 0.4s ease;
+}
+
+/* Global header overlay */
+#global-header {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 900;
+  text-align: center;
+  pointer-events: none;
+  user-select: none;
+}
+
+.gh-title {
+  font-family: 'JetBrains Mono', monospace, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: rgba(255,255,255,0.85);
+  text-shadow: 0 0 20px rgba(0,229,255,0.6);
+}
+
+.gh-sub {
+  margin-top: 4px;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  color: rgba(0,229,255,0.6);
+  animation: gh-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes gh-pulse {
+  0%, 100% { opacity: 0.55; }
+  50%       { opacity: 1; }
+}
+
+/* ── Region hover tooltip ──────────────────────────────────────────── */
+
+.region-tooltip {
+  position: absolute;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 950;
+  background: rgba(0,0,0,0.85);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  padding: 12px 18px;
+  text-align: center;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+  animation: rt-in 0.15s ease;
+}
+
+@keyframes rt-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.rt-name {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #fff;
+}
+
+.rt-sub {
+  margin-top: 2px;
+  font-size: 10px;
+  color: rgba(255,255,255,0.55);
+}
+
+.rt-vessels {
+  margin-top: 6px;
+  font-size: 10px;
+  color: rgba(0,229,255,0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.rt-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #00e5ff;
+  box-shadow: 0 0 6px #00e5ff;
+  animation: blink 1s step-end infinite;
+}
+
+.rt-cta {
+  margin-top: 8px;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: rgba(255,255,255,0.3);
+}
+
+/* ── Region polygon hover glow ─────────────────────────────────────── */
+
+.region-poly {
+  cursor: pointer;
+  transition: fill-opacity 0.15s ease, stroke-opacity 0.15s ease;
+}
+
+/* ── Phase 2: region lock UI ───────────────────────────────────────── */
+
+#region-exit-btn {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 900;
+  background: rgba(0,0,0,0.8);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 5px;
+  color: rgba(255,255,255,0.85);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding: 8px 16px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+#region-exit-btn:hover {
+  background: rgba(255,29,68,0.2);
+  border-color: #ff1744;
+  color: #ff1744;
+}
+
+#region-chip {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(0,0,0,0.75);
+  border: 1px solid;
+  border-radius: 20px;
+  padding: 5px 14px;
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+
+.rc-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  animation: blink 1s step-end infinite;
+}
+
+.rc-name {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.9);
+}
+
+.rc-live {
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  color: #3fb950;
+  font-weight: 700;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.2; }
 }

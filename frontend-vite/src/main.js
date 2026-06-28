@@ -4,6 +4,7 @@ import { state } from "./state.js";
 import { fmtDate } from "./utils.js";
 import { loadData, currentDates } from "./api.js";
 import { renderCards } from "./ui.js";
+import { initGlobalPhase, currentPhase, enterRegionPhase } from "./phase.js";
 import { getVisibleVessels } from "./vessels.js";
 import {
   renderHexGrid,
@@ -31,11 +32,12 @@ initGovernance();
 // ==================================================================
 // MAP INIT
 // ==================================================================
-state.map = L.map("map", { zoomControl: true }).setView([-0.5, -90.5], 7);
+state.map = L.map("map", { zoomControl: true }).setView([20, 0], 2);
 state.markerLayer = L.layerGroup().addTo(state.map);
 state.ringLayer = L.layerGroup().addTo(state.map);
 state.gapLayer = L.layerGroup().addTo(state.map);
 state.mpaLayer = L.layerGroup().addTo(state.map);
+state.detailLayer = L.layerGroup().addTo(state.map);
 
 // ==================================================================
 // BASE LAYERS
@@ -239,7 +241,7 @@ document.getElementById("cat-filters").addEventListener("click", (e) => {
 // MAP MOVE — show "Search this area" button + area warning
 // ==================================================================
 function maybeShowButton() {
-  if (state.ready && !_hexModeActive)
+  if (state.ready && !_hexModeActive && currentPhase() === 'REGION')
     document.getElementById("search-btn").classList.add("show");
 }
 function updateAreaWarning() {
@@ -255,20 +257,13 @@ state.map.on("moveend", () => {
 });
 
 // ==================================================================
-// STARTUP — skip onboarding, boot straight into hex mode
+// STARTUP — enter global level-select phase
 // ==================================================================
 (async () => {
-  const b = state.map.getBounds();
-  await loadData({
-    min_lat: b.getSouth(),
-    max_lat: b.getNorth(),
-    min_lon: b.getWest(),
-    max_lon: b.getEast(),
-  });
+  initGlobalPhase();
   state.ready = true;
-  setHexMode(true);
 
-  initAlerts();
+  await initAlerts();
   initAuth();
   await refreshStatsBar();
 
