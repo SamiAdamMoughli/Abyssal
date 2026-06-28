@@ -1,0 +1,7 @@
+# Custom PostGIS image for Railway deployment.
+# Railway's managed Postgres plugin does not include PostGIS, so we deploy
+# the kartoza/postgis image as a custom service and bake the extension bootstrap
+# SQL in at image build time.
+FROM kartoza/postgis:16-3.4
+
+COPY src/spyhop/db/migrations/init.sql /docker-entrypoint-initdb.d/01_init.sql

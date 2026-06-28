@@ -1,0 +1,39 @@
+# Railway service config — vesselx-spatial-engine (the public API).
+# Other services share the same Dockerfile but override startCommand in the
+# Railway dashboard. See comments below for each service's command.
+#
+# Services and their start commands:
+#
+#   vesselx-spatial-engine  (this file — public, $PORT exposed)
+#     alembic upgrade head && uvicorn vesselx.spatial_engine.app:app \
+#       --host 0.0.0.0 --port $PORT --workers 4 --loop uvloop --http httptools
+#
+#   vesselx-analytics-engine  (private)
+#     uvicorn vesselx.analytics_engine.app:app \
+#       --host 0.0.0.0 --port $PORT --workers 2 --loop uvloop --http httptools
+#
+#   vesselx-spatial-worker  (private, no port)
+#     python -m vesselx.spatial_worker.worker
+#
+#   vesselx-brain  (private, no port)
+#     celery -A spyhop.worker.celery_app worker \
+#       --loglevel=info --concurrency=4 --queues=default,scoring,sync
+#
+#   vesselx-sync-worker  (private, no port)
+#     celery -A spyhop.worker.celery_app beat \
+#       --loglevel=info --scheduler celery.beat.PersistentScheduler \
+#       --schedule /tmp/celerybeat-schedule
+#
+#   vesselx-core-db  (private — deploy from Dockerfile.db, not this one)
+#     (no startCommand override — kartoza/postgis handles its own init)
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "alembic upgrade head && uvicorn vesselx.spatial_engine.app:app --host 0.0.0.0 --port $PORT --workers 4 --loop uvloop --http httptools --log-level info"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
