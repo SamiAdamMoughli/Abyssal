@@ -3161,8 +3161,9 @@ a.leaflet-popup-close-button {
 
 /* ── Region polygon hover glow ─────────────────────────────────────── */
 
-.region-poly {
-  cursor: pointer;
+.region-poly,
+.region-poly path {
+  cursor: pointer !important;
   transition: fill-opacity 0.15s ease, stroke-opacity 0.15s ease;
 }
 

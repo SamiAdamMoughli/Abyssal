@@ -39,10 +39,17 @@ export function initGlobalPhase() {
   map.setMaxZoom(6);
   map.setView([20, 10], 2, { animate: true, duration: 0.8 });
 
-  // Disable scroll zoom — user can only navigate by clicking regions
+  // Disable pan/zoom — navigation is via region click only.
+  // We do NOT disable the map's mouse event pipeline (dragging.disable()
+  // would also swallow mouseover/click on our polygon layers).
   map.scrollWheelZoom.disable();
   map.doubleClickZoom.disable();
-  map.dragging.disable();
+  // dragging left enabled so Leaflet still dispatches mouseover/click to layers;
+  // user can nudge the globe, but that's acceptable — the real lock is maxBounds.
+
+  // Hide the loading overlay — no data loads in GLOBAL phase
+  const ov = document.getElementById('map-overlay');
+  if (ov) ov.classList.add('hidden');
 
   _buildPolygons();
   _showGlobalUI();
@@ -145,7 +152,6 @@ export function exitRegionPhase() {
   map.setMaxBounds(null);
   map.scrollWheelZoom.disable();
   map.doubleClickZoom.disable();
-  map.dragging.disable();
 
   // Fly back out
   map.flyTo([20, 10], 2, { animate: true, duration: 1.0 });
