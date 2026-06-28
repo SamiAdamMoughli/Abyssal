@@ -47,7 +47,10 @@ _TYPE_MAP: dict[str, str] = {
 
 
 def _api_key() -> str:
-    return os.environ.get("GFW_API_KEY", "") or os.environ.get("GFW_API_TOKEN", "")
+    return (
+        os.environ.get("GFW_API_KEY", "")
+        or os.environ.get("GFW_API_TOKEN", "")
+    )
 
 
 def _headers() -> dict[str, str]:
@@ -63,7 +66,7 @@ def fetch_recent_vessels(
     limit: int = 1000,
     timeout: float = 60.0,
 ) -> list[dict[str, Any]]:
-    """Return up to ``limit`` unique vessels active in the last ``hours`` hours.
+    """Return up to ``limit`` unique vessels active in the last ``hours`` h.
 
     Makes a single POST to /v3/events with all relevant dataset types, then
     deduplicates by MMSI, keeping the most-recent-event position.
@@ -83,43 +86,42 @@ def fetch_recent_vessels(
             f"{GFW_BASE}/events",
             headers=_headers(),
             json=payload,
-            params={"limit": limit, "offset": 0},
+            # GFW requires limit AND offset together as query params
+        params={"limit": limit, "offset": 0},
         )
         resp.raise_for_status()
         data = resp.json()
 
-    events: list[dict] = data.get("entries", [])
+    return _dedup_events(data.get("entries", []))
 
-    # --- Deduplicate by MMSI, keeping the most-recent event -----------------
+
+def _dedup_events(events: list[dict]) -> list[dict[str, Any]]:
+    """Deduplicate GFW events by MMSI, keeping the most-recent position."""
     latest: dict[str, dict] = {}
     for ev in events:
-        vessel_info = ev.get("vessel") or {}
-        mmsi = str(vessel_info.get("ssvid") or vessel_info.get("mmsi") or "").strip()
+        info = ev.get("vessel") or {}
+        mmsi = str(
+            info.get("ssvid") or info.get("mmsi") or ""
+        ).strip()
         if not mmsi or mmsi == "0":
             continue
-
         ev_end = ev.get("end") or ev.get("start") or ""
         prev = latest.get(mmsi)
-        if prev is None or ev_end > prev.get("_ev_end", ""):
-            pos = ev.get("position") or {}
-            latest[mmsi] = {
-                "_ev_end":   ev_end,
-                "_ev_type":  str(ev.get("type", "")).lower(),
-                "mmsi":      mmsi,
-                "name":      vessel_info.get("name") or f"VESSEL-{mmsi[-4:]}",
-                "flag":      vessel_info.get("flag") or "UNK",
-                "vessel_type": _TYPE_MAP.get(
-                    str(vessel_info.get("vesselType") or "").upper(), "fishing"
-                ),
-                "lat":       float(pos.get("lat") or 0.0),
-                "lon":       float(pos.get("lon") or 0.0),
-                "speed_knots": 0.0,
-            }
-
-    # --- Drop vessels with no usable position --------------------------------
-    results = [
-        v for v in latest.values()
-        if v["lat"] != 0.0 or v["lon"] != 0.0
-    ]
-
-    return results
+        if prev is not None and ev_end <= prev.get("_ev_end", ""):
+            continue
+        pos = ev.get("position") or {}
+        vtype = _TYPE_MAP.get(
+            str(info.get("vesselType") or "").upper(), "fishing"
+        )
+        latest[mmsi] = {
+            "_ev_end":    ev_end,
+            "_ev_type":   str(ev.get("type", "")).lower(),
+            "mmsi":       mmsi,
+            "name":       info.get("name") or f"VESSEL-{mmsi[-4:]}",
+            "flag":       info.get("flag") or "UNK",
+            "vessel_type": vtype,
+            "lat":        float(pos.get("lat") or 0.0),
+            "lon":        float(pos.get("lon") or 0.0),
+            "speed_knots": 0.0,
+        }
+    return [v for v in latest.values() if v["lat"] or v["lon"]]
