@@ -33,7 +33,7 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 preDeployCommand = "alembic upgrade head"
-startCommand = "sh -c 'uvicorn vesselx.spatial_engine.app:app --host 0.0.0.0 --port ${PORT:-8000} --workers 4 --loop uvloop --http httptools --log-level info'"
+startCommand = "sh /app/start.sh"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"

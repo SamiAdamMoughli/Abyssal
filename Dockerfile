@@ -60,6 +60,7 @@ WORKDIR /app
 COPY --chown=spyhop:spyhop src/ ./src/
 COPY --chown=spyhop:spyhop backend/ ./backend/
 COPY --chown=spyhop:spyhop alembic.ini ./
+COPY --chown=spyhop:spyhop start.sh ./start.sh
 
 # Add src and repo root to PYTHONPATH so both `spyhop` and `backend` packages
 # are importable without installing them as editable packages.
@@ -74,12 +75,5 @@ USER spyhop
 # Expose the API port (workers don't expose any)
 EXPOSE 8000
 
-# Default command: run the VesselX spatial engine API.
-# Override in docker-compose.yml for worker / beat / flower.
-CMD ["uvicorn", "vesselx.spatial_engine.app:app", \
-     "--host", "0.0.0.0", \
-     "--port", "8000", \
-     "--workers", "4", \
-     "--loop", "uvloop", \
-     "--http", "httptools", \
-     "--log-level", "info"]
+# start.sh dispatches to uvicorn/celery-worker/celery-beat based on SERVICE_TYPE.
+CMD ["/bin/sh", "/app/start.sh"]
