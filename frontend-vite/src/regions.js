@@ -1,183 +1,148 @@
-/**
- * Maritime region definitions for the Level-Select FSM.
- *
- * Each region defines:
- *   id        — unique slug
- *   name      — display label
- *   sub       — short descriptor shown on the card
- *   center    — [lat, lon] camera fly-to target
- *   zoom      — zoom level when locked into region
- *   bounds    — [[swLat, swLon], [neLat, neLon]] — maxBounds lock
- *   polygon   — L.latLng array for the highlight overlay (clockwise)
- *   color     — hex accent used for the polygon highlight
- *   vessels   — approximate active vessel count label
- */
-
 export const REGIONS = [
-  {
-    id: 'north_sea',
-    name: 'North Sea',
-    sub: 'High-traffic European gateway',
-    center: [56.5, 4.0],
-    zoom: 6,
-    bounds: [[50.5, -5.0], [62.0, 13.0]],
-    polygon: [[62,13],[62,-5],[50.5,-5],[50.5,13]],
-    color: '#00e5ff',
-    vessels: '800+',
-  },
   {
     id: 'baltic_sea',
     name: 'Baltic Sea',
-    sub: 'Enclosed sea, heavy ferry & cargo',
-    center: [58.5, 19.0],
+    sub: 'Enclosed basin · ferries, cargo, fishing fleets',
+    center: [59.5, 20.5],
     zoom: 6,
-    bounds: [[54.0, 9.5], [65.5, 30.0]],
-    polygon: [[65.5,30],[65.5,9.5],[54,9.5],[54,30]],
+    bounds: [[54.0, 10.0], [66.0, 30.5]],
     color: '#00e5ff',
     vessels: '400+',
+    // Clockwise from Øresund, tracing the actual coastline
+    polygon: [
+      [55.3, 10.5],  // Øresund south / Copenhagen
+      [55.0, 11.2],  // Fehmarn Belt
+      [54.3, 12.5],  // Rügen
+      [54.0, 14.2],  // Pomeranian coast
+      [54.4, 16.2],  // Polish coast
+      [54.5, 18.6],  // Gdańsk Bay
+      [54.8, 19.9],  // Kaliningrad coast
+      [55.4, 21.1],  // Lithuanian coast
+      [56.5, 21.1],  // Latvian SW
+      [57.5, 21.6],  // Latvian W
+      [58.4, 22.1],  // Saaremaa / Estonian W
+      [59.4, 22.2],  // Gulf of Finland mouth S
+      [59.3, 24.5],  // Tallinn
+      [59.6, 26.0],  // Gulf of Finland E
+      [60.1, 27.2],  // Viborg area
+      [60.4, 28.7],  // Near Vyborg
+      [59.9, 29.8],  // Near St Petersburg
+      [60.3, 25.0],  // Finnish S coast
+      [60.2, 24.9],  // Helsinki
+      [60.5, 22.3],  // Turku archipelago
+      [61.1, 21.5],  // Rauma
+      [62.6, 21.2],  // Vaasa
+      [63.5, 21.6],  // Gulf of Bothnia central
+      [64.6, 22.1],  // Umeå
+      [65.6, 22.6],  // Luleå
+      [65.8, 24.6],  // Head of Bothnia (Tornio)
+      [65.5, 25.5],  // Oulu
+      [64.1, 24.2],  // Finnish coast mid
+      [62.5, 20.6],  // Finnish coast south
+      [60.5, 19.1],  // Åland Islands
+      [59.5, 18.5],  // Stockholm archipelago
+      [59.3, 18.4],  // Stockholm
+      [58.5, 17.6],  // SE Sweden
+      [57.5, 16.6],  // Kalmar
+      [56.5, 16.1],  // Karlskrona
+      [55.8, 14.6],  // Malmö
+      [55.5, 13.1],  // Øresund N
+      [55.3, 10.5],  // close
+    ],
   },
+
   {
-    id: 'mediterranean',
-    name: 'Mediterranean Sea',
-    sub: 'Smuggling routes & migrant crossings',
-    center: [37.5, 15.0],
+    id: 'english_channel',
+    name: 'English Channel',
+    sub: 'Busiest chokepoint · 500+ ships/day through Dover',
+    center: [50.2, -1.8],
+    zoom: 7,
+    bounds: [[48.0, -6.0], [51.8, 2.6]],
+    color: '#ffd600',
+    vessels: '500+',
+    // English coast (N) → Dover → French coast (S) → Brittany → back
+    polygon: [
+      [51.6, -5.5],  // SW Wales / Pembrokeshire
+      [51.1, -5.7],  // N Devon coast
+      [50.7, -5.7],  // Land's End
+      [50.0, -5.2],  // Lizard Point
+      [50.2, -4.2],  // Plymouth
+      [50.6, -2.5],  // Weymouth / Lyme Bay
+      [50.7, -1.2],  // Solent / Isle of Wight
+      [50.8, -0.2],  // Eastbourne
+      [51.1, 1.3],   // Dover
+      [51.2, 1.8],   // Goodwin Sands
+      [51.5, 2.5],   // North Sea entrance (UK)
+      [51.2, 2.5],   // North Sea entrance (FR)
+      [51.0, 1.9],   // Calais
+      [50.7, 1.6],   // Boulogne
+      [50.1, 1.6],   // Somme estuary
+      [49.9, 1.0],   // Dieppe
+      [49.5, 0.1],   // Étretat / Fécamp
+      [49.4, -0.4],  // Le Havre
+      [49.4, -1.0],  // Normandy coast
+      [49.1, -1.7],  // Cherbourg E
+      [49.7, -1.9],  // Cherbourg
+      [49.7, -2.6],  // Cap de la Hague
+      [48.8, -3.5],  // Brittany N coast
+      [48.6, -4.4],  // Brest outer
+      [48.4, -5.1],  // Pointe du Raz
+      [48.0, -5.1],  // SW Brittany
+      [48.0, -6.0],  // Atlantic corner
+      [49.5, -6.0],  // Atlantic approach
+      [50.0, -5.7],  // Scilly area
+      [51.6, -5.5],  // close
+    ],
+  },
+
+  {
+    id: 'gulf_of_mexico',
+    name: 'Gulf of Mexico',
+    sub: 'Industrial hub · oil rigs, Port of Houston, cruise traffic',
+    center: [24.5, -90.0],
     zoom: 5,
-    bounds: [[30.0, -6.0], [46.0, 37.0]],
-    polygon: [[46,37],[46,-6],[30,-6],[30,37]],
+    bounds: [[18.0, -98.0], [30.5, -80.0]],
     color: '#ff6d00',
-    vessels: '1200+',
-  },
-  {
-    id: 'red_sea',
-    name: 'Red Sea & Gulf of Aden',
-    sub: 'Houthi threat zone, Suez choke point',
-    center: [15.0, 43.0],
-    zoom: 5,
-    bounds: [[10.0, 32.0], [30.0, 55.0]],
-    polygon: [[30,55],[30,32],[10,32],[10,55]],
-    color: '#ff1744',
     vessels: '600+',
-  },
-  {
-    id: 'persian_gulf',
-    name: 'Persian Gulf',
-    sub: 'Oil tanker corridor, sanctions evasion',
-    center: [26.5, 52.0],
-    zoom: 6,
-    bounds: [[22.0, 47.0], [30.5, 60.0]],
-    polygon: [[30.5,60],[30.5,47],[22,47],[22,60]],
-    color: '#ff6d00',
-    vessels: '300+',
-  },
-  {
-    id: 'strait_malacca',
-    name: 'Strait of Malacca',
-    sub: "World's busiest shipping lane",
-    center: [3.5, 101.0],
-    zoom: 6,
-    bounds: [[-2.0, 95.0], [9.0, 110.0]],
-    polygon: [[9,110],[9,95],[-2,95],[-2,110]],
-    color: '#00e676',
-    vessels: '900+',
-  },
-  {
-    id: 'south_china_sea',
-    name: 'South China Sea',
-    sub: 'Disputed waters, IUU fishing hotspot',
-    center: [12.0, 114.0],
-    zoom: 5,
-    bounds: [[-5.0, 99.0], [25.0, 125.0]],
-    polygon: [[25,125],[25,99],[-5,99],[-5,125]],
-    color: '#ff1744',
-    vessels: '1800+',
-  },
-  {
-    id: 'east_china_sea',
-    name: 'East China Sea',
-    sub: 'Chinese fleet operations, ADIZ tensions',
-    center: [28.0, 124.0],
-    zoom: 6,
-    bounds: [[22.0, 118.0], [40.0, 132.0]],
-    polygon: [[40,132],[40,118],[22,118],[22,132]],
-    color: '#ff6d00',
-    vessels: '700+',
-  },
-  {
-    id: 'west_africa',
-    name: 'West Africa / Gulf of Guinea',
-    sub: 'Piracy, illegal fishing, oil bunkering',
-    center: [2.0, 3.0],
-    zoom: 5,
-    bounds: [[-10.0, -20.0], [15.0, 15.0]],
-    polygon: [[15,15],[15,-20],[-10,-20],[-10,15]],
-    color: '#ff6d00',
-    vessels: '500+',
-  },
-  {
-    id: 'horn_of_africa',
-    name: 'Horn of Africa',
-    sub: 'Piracy corridor, IUU fishing',
-    center: [8.0, 50.0],
-    zoom: 5,
-    bounds: [[-5.0, 38.0], [18.0, 62.0]],
-    polygon: [[18,62],[18,38],[-5,38],[-5,62]],
-    color: '#ff1744',
-    vessels: '400+',
-  },
-  {
-    id: 'caribbean',
-    name: 'Caribbean Sea',
-    sub: 'Drug transit, flag-of-convenience hub',
-    center: [17.0, -73.0],
-    zoom: 5,
-    bounds: [[8.0, -90.0], [27.0, -58.0]],
-    polygon: [[27,-58],[27,-90],[8,-90],[8,-58]],
-    color: '#00e676',
-    vessels: '500+',
-  },
-  {
-    id: 'north_atlantic',
-    name: 'North Atlantic',
-    sub: 'Trans-Atlantic trade lanes',
-    center: [48.0, -35.0],
-    zoom: 4,
-    bounds: [[30.0, -70.0], [65.0, -5.0]],
-    polygon: [[65,-5],[65,-70],[30,-70],[30,-5]],
-    color: '#00e5ff',
-    vessels: '1000+',
-  },
-  {
-    id: 'arctic',
-    name: 'Arctic Ocean',
-    sub: 'Emerging Northern Sea Route',
-    center: [76.0, 30.0],
-    zoom: 4,
-    bounds: [[65.0, -30.0], [85.0, 100.0]],
-    polygon: [[85,100],[85,-30],[65,-30],[65,100]],
-    color: '#00e5ff',
-    vessels: '80+',
-  },
-  {
-    id: 'southern_ocean',
-    name: 'Southern Ocean',
-    sub: 'CCAMLR zone, toothfish IUU ops',
-    center: [-57.0, 0.0],
-    zoom: 4,
-    bounds: [[-75.0, -60.0], [-45.0, 60.0]],
-    polygon: [[-45,60],[-45,-60],[-75,-60],[-75,60]],
-    color: '#00e676',
-    vessels: '120+',
-  },
-  {
-    id: 'great_barrier_reef',
-    name: 'Great Barrier Reef',
-    sub: 'Marine park, MPA enforcement zone',
-    center: [-18.0, 148.0],
-    zoom: 6,
-    bounds: [[-25.0, 142.0], [-10.0, 155.0]],
-    polygon: [[-10,155],[-10,142],[-25,142],[-25,155]],
-    color: '#00e676',
-    vessels: '200+',
+    // Clockwise from Texas coast
+    polygon: [
+      [30.0, -97.5],  // Texas central coast
+      [29.4, -94.7],  // Galveston / Houston
+      [29.3, -93.5],  // Sabine Pass
+      [29.1, -92.5],  // Louisiana coast W
+      [29.2, -90.0],  // Mississippi delta
+      [29.0, -88.8],  // Louisiana coast E
+      [30.2, -88.1],  // Mobile Bay
+      [30.2, -87.3],  // Pensacola
+      [30.1, -86.0],  // Florida panhandle
+      [30.0, -85.0],  // Apalachicola Bay
+      [29.5, -83.5],  // Florida W coast N
+      [28.0, -83.0],  // Tampa Bay
+      [27.5, -82.6],  // Sarasota
+      [26.1, -82.0],  // Fort Myers
+      [25.5, -81.5],  // Cape Sable
+      [25.2, -80.6],  // Florida Keys start
+      [24.8, -81.5],  // Key West
+      [24.5, -82.8],  // Dry Tortugas
+      [23.3, -84.1],  // Cuba NW cape
+      [22.5, -84.5],  // Cuba W tip
+      [21.9, -85.0],  // Cuba SW
+      [21.5, -86.7],  // Yucatan Channel
+      [21.3, -87.5],  // Yucatan NE
+      [20.8, -87.3],  // Cancún area
+      [19.8, -87.5],  // Belize coast N
+      [18.5, -88.2],  // Belize S
+      [18.5, -90.0],  // Tabasco / Campeche
+      [19.0, -91.5],  // Campeche Bay E
+      [18.7, -92.6],  // Tabasco coast
+      [19.1, -93.6],  // Veracruz state N
+      [20.0, -97.1],  // Tamaulipas
+      [22.5, -97.8],  // Tampico / Altamira
+      [24.0, -97.4],  // Brownsville / Matamoros
+      [26.1, -97.2],  // South Texas
+      [28.0, -97.0],  // Corpus Christi
+      [30.0, -97.5],  // close
+    ],
   },
 ];
 
