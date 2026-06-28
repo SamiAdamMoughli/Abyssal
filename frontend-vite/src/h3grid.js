@@ -1,11 +1,25 @@
-import { cellToBoundary } from 'h3-js';
+import { cellToBoundary, cellToParent } from 'h3-js';
 import { state } from './state.js';
 import { API_URL } from './config.js';
 import { closeStream, openStream } from './api.js';
 import { renderCards, updateVesselCounts } from './ui.js';
 import { syncMarkers } from './markers.js';
 
-export const H3_RESOLUTION = 7;  // ~5 km² per hex
+// Dynamic resolution: targets ~30 visible cells at any zoom level.
+// Each step down in zoom ~halves the number of visible cells, so we coarsen
+// the resolution by 1 every 2 zoom levels to compensate.
+export function getResolution() {
+  const z = state.map?.getZoom() ?? 5;
+  if (z <= 2)  return 1;  // ~600K km² — continent slabs
+  if (z <= 4)  return 2;  // ~87K km²  — country scale
+  if (z <= 6)  return 3;  // ~12K km²  — large region
+  if (z <= 8)  return 4;  // ~1.8K km² — patrol zone
+  if (z <= 10) return 5;  // ~250 km²  — coastal detail
+  return 6;               // ~36 km²   — port precision
+}
+
+// For backward compat with flashCell's cellToParent call.
+export const H3_RESOLUTION = 4;
 
 let _gridLayer = null;
 const _selectedCells = new Set();
@@ -23,13 +37,14 @@ export async function renderHexGrid() {
   if (!state.map) return;
   clearHexGrid();
 
+  const res = getResolution();
   const b = state.map.getBounds();
   const qs = new URLSearchParams({
     min_lat: b.getSouth().toFixed(4),
     max_lat: b.getNorth().toFixed(4),
     min_lon: b.getWest().toFixed(4),
     max_lon: b.getEast().toFixed(4),
-    resolution: H3_RESOLUTION,
+    resolution: res,
   });
 
   let cells = [];
@@ -134,6 +149,40 @@ function _updateBadge() {
   if (badge) badge.textContent = _selectedCells.size > 0
     ? `${_selectedCells.size} cells selected` : '';
   if (btn) btn.disabled = _selectedCells.size === 0;
+}
+
+/**
+ * Flash a hex cell to signal an inbound alert, then revert to its resting style.
+ * @param {string} cellId  - H3 cell ID (must be currently rendered on the grid).
+ * @param {string} severity - 'critical' | 'alert' | 'warning' | 'info'
+ */
+export function flashCell(cellId, severity = 'alert') {
+  // Alert h3_index may be stored at a finer resolution than the display grid.
+  // Walk up to the display resolution so we always find a rendered polygon.
+  let lookupId = cellId;
+  if (!_cellPolygons[lookupId]) {
+    try { lookupId = cellToParent(cellId, getResolution()); } catch { return; }
+  }
+  const poly = _cellPolygons[lookupId];
+  if (!poly) return;
+
+  const flashColor = severity === 'critical' ? '#ff1053'
+                   : severity === 'alert'    ? '#F45700'
+                   : severity === 'warning'  ? '#ffaa00'
+                   :                           '#32d6ff';
+
+  const originalStyle = _cellStyle(poly._vesselCount, _selectedCells.has(cellId));
+
+  // Three-pulse flash — set → revert → set → revert → set → revert
+  const pulseOn  = { fillColor: flashColor, fillOpacity: 0.75, color: flashColor, weight: 3, opacity: 1 };
+  const pulseOff = { ...originalStyle, fillOpacity: originalStyle.fillOpacity * 0.4 };
+
+  poly.setStyle(pulseOn);
+  setTimeout(() => poly.setStyle(pulseOff), 200);
+  setTimeout(() => poly.setStyle(pulseOn),  400);
+  setTimeout(() => poly.setStyle(pulseOff), 600);
+  setTimeout(() => poly.setStyle(pulseOn),  800);
+  setTimeout(() => poly.setStyle(originalStyle), 3000);
 }
 
 /** Bounding box that encloses all selected cells — used to open the SSE stream. */

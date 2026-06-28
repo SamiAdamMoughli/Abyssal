@@ -17,30 +17,34 @@ class Settings(BaseSettings):
     )
 
     # --- Application ---------------------------------------------------------
-    APP_NAME: str = "Mission Radar (Spyhop)"
+    APP_NAME: str = "VesselX"
     APP_VERSION: str = "1.0.0"
     LOG_LEVEL: str = "INFO"
     DATA_SOURCE: Literal["synthetic", "gfw"] = "synthetic"
 
     # --- PostgreSQL (async — FastAPI) ----------------------------------------
-    DATABASE_URL: str = "postgresql+asyncpg://spyhop:spyhop@db:5432/spyhop"
+    DATABASE_URL: str = (
+        "postgresql+asyncpg://vesselx:vesselx@vesselx-core-db:5432/vesselx"
+    )
     DB_POOL_SIZE: int = 20
     DB_MAX_OVERFLOW: int = 40
     DB_POOL_TIMEOUT: int = 30
     DB_POOL_RECYCLE: int = 1800  # recycle connections every 30 min
 
     # --- PostgreSQL (sync — Celery) -------------------------------------------
-    SYNC_DATABASE_URL: str = "postgresql+psycopg2://spyhop:spyhop@db:5432/spyhop"
+    SYNC_DATABASE_URL: str = (
+        "postgresql+psycopg2://vesselx:vesselx@vesselx-core-db:5432/vesselx"
+    )
 
     # --- Redis ---------------------------------------------------------------
-    REDIS_URL: str = "redis://redis:6379/0"
+    REDIS_URL: str = "redis://vesselx-telemetry-cache:6379/0"
     REDIS_MAX_CONNECTIONS: int = 50
     REDIS_SOCKET_TIMEOUT: float = 5.0
     REDIS_SOCKET_CONNECT_TIMEOUT: float = 5.0
 
     # --- Celery --------------------------------------------------------------
-    CELERY_BROKER_URL: str = "redis://redis:6379/1"
-    CELERY_RESULT_BACKEND: str = "redis://redis:6379/2"
+    CELERY_BROKER_URL: str = "redis://vesselx-telemetry-cache:6379/1"
+    CELERY_RESULT_BACKEND: str = "redis://vesselx-telemetry-cache:6379/2"
 
     # --- Cache TTLs (seconds) ------------------------------------------------
     VESSEL_CACHE_TTL: int = 60          # bbox result cache

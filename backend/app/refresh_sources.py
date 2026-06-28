@@ -16,12 +16,12 @@ from __future__ import annotations
 import logging
 
 from .data_cache import cache_info
-from .sources import eez, iuu_list, opensanctions, port_control
+from .sources import biodiversity, dark_vessels, eez, iuu_list, opensanctions, port_control
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger("mission_radar.refresh")
 
-SOURCES = [iuu_list, opensanctions, port_control, eez]
+SOURCES = [iuu_list, opensanctions, port_control, eez, biodiversity, dark_vessels]
 
 
 def main() -> None:

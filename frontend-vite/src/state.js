@@ -14,4 +14,7 @@ export const state = {
   currentSort: 'score_desc',
   currentCatFilter: 'all',
   eventSource: null,
+  // Alert feed
+  alertsSocket: null,
+  alertsCache: [],
 };

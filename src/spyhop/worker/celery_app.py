@@ -1,10 +1,11 @@
 """Celery application factory + beat schedule.
 
 Beat tasks:
-  fetch_and_score_vessels    — every 5 minutes (real-time vessel tracking)
-  sync_iuu_list              — daily at 02:00 UTC (CCAMLR/RFMO/TMT list refresh)
-  sync_sanctions             — daily at 03:00 UTC (OpenSanctions bulk refresh)
-  sync_environment_raster    — hourly at :05 UTC (SST / wave / wind grid refresh)
+  fetch_and_score_vessels        — every 5 minutes (real-time vessel tracking)
+  sync_iuu_list                  — daily at 02:00 UTC (CCAMLR/RFMO/TMT list refresh)
+  sync_sanctions                 — daily at 03:00 UTC (OpenSanctions bulk refresh)
+  sync_environment_raster        — hourly at :05 UTC (SST / wave / wind grid refresh)
+  brain.evaluate_spatialized_batch — every 30 s (rule evaluation from telemetry stream)
 """
 
 from __future__ import annotations
@@ -20,7 +21,10 @@ celery_app = Celery(
     "spyhop",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
-    include=["spyhop.worker.tasks"],
+    include=[
+        "spyhop.worker.tasks",
+        "vesselx.brain.tasks",
+    ],
 )
 
 celery_app.conf.update(
@@ -78,6 +82,11 @@ celery_app.conf.update(
             "task": "spyhop.worker.tasks.compute_h3_context",
             "schedule": crontab(minute=30, hour="*/6"),
             "options": {"queue": "sync"},
+        },
+        "brain-evaluate-spatialized-batch-every-30s": {
+            "task": "brain.evaluate_spatialized_batch",
+            "schedule": 30.0,
+            "options": {"queue": "default"},
         },
     },
 )

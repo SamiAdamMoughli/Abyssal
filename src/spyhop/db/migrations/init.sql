@@ -1,5 +1,5 @@
 -- =============================================================================
--- Mission Radar (Spyhop) — PostgreSQL extension bootstrap
+-- VesselX — PostgreSQL extension bootstrap
 -- Run automatically by the postgis/postgis Docker image via
 -- /docker-entrypoint-initdb.d/01_init.sql
 -- =============================================================================

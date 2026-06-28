@@ -48,9 +48,9 @@ def h3_polyfill(
     max_lat: float = Query(..., ge=-90, le=90),
     min_lon: float = Query(..., ge=-180, le=180),
     max_lon: float = Query(..., ge=-180, le=180),
-    resolution: int = Query(default=_DEFAULT_RES, ge=3, le=10),
+    resolution: int = Query(default=_DEFAULT_RES, ge=1, le=10),
 ) -> dict[str, Any]:
-    """Return H3 cells at *resolution* that cover the given bbox (capped 500)."""
+    """Return H3 cells at *resolution* covering the bbox (capped 500)."""
     all_cells = _bbox_to_cells(min_lat, max_lat, min_lon, max_lon, resolution)
     cells = all_cells[:_MAX_CELLS]
     log.info("h3.polyfill", count=len(cells), resolution=resolution)
@@ -63,7 +63,7 @@ async def h3_cells_with_counts(
     max_lat: float = Query(..., ge=-90, le=90),
     min_lon: float = Query(..., ge=-180, le=180),
     max_lon: float = Query(..., ge=-180, le=180),
-    resolution: int = Query(default=_DEFAULT_RES, ge=3, le=10),
+    resolution: int = Query(default=_DEFAULT_RES, ge=1, le=10),
     repo: VesselRepository = Depends(get_vessel_repo),
 ) -> dict[str, Any]:
     """H3 cells + per-cell vessel counts.
@@ -71,7 +71,7 @@ async def h3_cells_with_counts(
     Occupied cells are always included; empty cells fill up to _MAX_CELLS.
     """
     all_cells = _bbox_to_cells(min_lat, max_lat, min_lon, max_lon, resolution)
-    counts = await repo.get_h3_vessel_counts(all_cells)
+    counts = await repo.get_h3_vessel_counts(all_cells, display_resolution=resolution)
 
     occupied_ids = set(counts.keys())
     empty_cells = [c for c in all_cells if c not in occupied_ids]
@@ -93,7 +93,11 @@ async def h3_cells_with_counts(
         occupied=len(occupied_ids),
         returned=len(features),
     )
-    return {"resolution": resolution, "count": len(features), "features": features}
+    return {
+        "resolution": resolution,
+        "count": len(features),
+        "features": features,
+    }
 
 
 @router.get("/context")

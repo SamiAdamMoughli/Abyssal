@@ -66,8 +66,15 @@ def _warmup_static_sources() -> None:
     Zugriffe - kein Datei-/Netzwerk-Zugriff im Request-Pfad. Fehlt eine Quelle,
     bleibt sie leer (Regel feuert nicht) - synthetic laeuft trotzdem.
     """
-    from .sources import eez, iuu_list, opensanctions, port_control
-    for mod in (iuu_list, opensanctions, port_control, eez):
+    from .sources import (
+        biodiversity,
+        dark_vessels,
+        eez,
+        iuu_list,
+        opensanctions,
+        port_control,
+    )
+    for mod in (iuu_list, opensanctions, port_control, eez, biodiversity, dark_vessels):
         try:
             mod.warmup()
         except Exception as exc:  # noqa: BLE001
@@ -180,6 +187,17 @@ def _load_vessels(source: str, bbox=None, start=None, end=None):
             detail=f"Datenquelle '{source}' fehlgeschlagen: {exc}",
         ) from exc
 
+    try:
+        from .sources import biodiversity
+        biodiversity.enrich_vessels(vessels)
+    except Exception:  # noqa: BLE001 - context enrichment is additive, not fatal
+        pass
+    try:
+        from .sources import dark_vessels
+        dark_vessels.enrich_vessels(vessels)
+        vessels = list(vessels) + dark_vessels.detections_as_vessels()
+    except Exception:  # noqa: BLE001 - context enrichment is additive, not fatal
+        pass
     _vessel_cache[key] = (now, list(vessels))
     return list(vessels)
 
@@ -212,6 +230,15 @@ def _assessment_to_dict(a: TargetAssessment) -> Dict[str, Any]:
         "flag": a.vessel.flag,
         "loitering_hours": a.vessel.loitering_hours,
         "vessel_type": getattr(a.vessel, "vessel_type", "unknown"),
+        "bio_risk": getattr(a.vessel, "bio_risk", "unknown"),
+        "bio_species_count": getattr(a.vessel, "bio_species_count", 0),
+        "bio_threatened_species": getattr(a.vessel, "bio_threatened_species", []),
+        "bio_cetaceans": getattr(a.vessel, "bio_cetaceans", []),
+        "bio_sea_turtles": getattr(a.vessel, "bio_sea_turtles", []),
+        "bio_sharks_rays": getattr(a.vessel, "bio_sharks_rays", []),
+        "dark_detection_count": getattr(a.vessel, "dark_detection_count", 0),
+        "dark_detection_sources": getattr(a.vessel, "dark_detection_sources", []),
+        "nearest_dark_detection_nm": getattr(a.vessel, "nearest_dark_detection_nm", -1.0),
         "score": a.score,
         "risk_score": a.score,
         "top_reason": _reason_to_dict(top) if top else None,
@@ -322,6 +349,38 @@ def get_protected_areas(
         "features": fc.get("features", []),
         "source": source,
         "count": len(fc.get("features", [])),
+    }
+
+
+@app.get("/api/biodiversity")
+def get_biodiversity(
+    min_lat: float,
+    max_lat: float,
+    min_lon: float,
+    max_lon: float,
+) -> Dict[str, Any]:
+    """Live OBIS species summary for a bbox.
+
+    Scoring remains cache-only; this endpoint is for map/ops inspection and
+    manual refresh validation of the selected patrol area.
+    """
+    bbox, _, _ = parse_region(min_lat, max_lat, min_lon, max_lon, None, None)
+    assert bbox is not None
+    from .sources import biodiversity
+    try:
+        records = biodiversity.fetch_area_species(min_lat, max_lat, min_lon, max_lon)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"OBIS fehlgeschlagen: {exc}") from exc
+    summary = biodiversity.classify_records(records)
+    return {
+        "source": "obis",
+        "bbox": {
+            "min_lat": min_lat,
+            "max_lat": max_lat,
+            "min_lon": min_lon,
+            "max_lon": max_lon,
+        },
+        **summary,
     }
 
 

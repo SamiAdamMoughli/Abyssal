@@ -89,6 +89,20 @@ class Vessel:
     historical_risk_score: float = -1.0  # highest score in last 30 days; -1 = new
     verified_vessel_type: str = ""       # registry type (IHS/Equasis); "" = unknown
 
+    # Biodiversity context from cached OBIS occurrences near the vessel.
+    bio_risk: str = "unknown"            # high/medium/low/none/unknown
+    bio_species_count: int = 0
+    bio_threatened_species: List[str] = field(default_factory=list)
+    bio_cetaceans: List[str] = field(default_factory=list)
+    bio_sea_turtles: List[str] = field(default_factory=list)
+    bio_sharks_rays: List[str] = field(default_factory=list)
+
+    # Non-collaborative remote sensing: cached SAR/VIIRS/optical detections
+    # nearby with no matching AIS ping in the same H3 cell/time window.
+    dark_detection_count: int = 0
+    dark_detection_sources: List[str] = field(default_factory=list)
+    nearest_dark_detection_nm: float = -1.0
+
 
 @dataclass
 class RiskReason:
@@ -806,6 +820,75 @@ def rule_type_mismatch(v: Vessel) -> Optional[RiskReason]:
     )
 
 
+def rule_bio_risk_fishing(v: Vessel) -> Optional[RiskReason]:
+    """Slow fishing behavior inside biologically valuable OBIS context."""
+    level = (v.bio_risk or "").lower()
+    if level not in {"high", "medium"}:
+        return None
+
+    slow_fishing = (
+        2.0 <= v.speed_knots <= 5.0
+        or v.behavior in {"trawling", "loitering"}
+        or v.loitering_hours >= 2.0
+    )
+    fishing_type = any(
+        key in (v.vessel_type or "").lower()
+        for key in ("trawler", "longliner", "seiner", "fishing")
+    )
+    if not (slow_fishing or fishing_type):
+        return None
+
+    species = (
+        v.bio_threatened_species
+        or v.bio_cetaceans
+        or v.bio_sea_turtles
+        or v.bio_sharks_rays
+    )
+    sample = ", ".join(species[:3]) if species else f"{v.bio_species_count} OBIS species"
+    if level == "high":
+        return RiskReason(
+            points=18,
+            label="Bio-Risiko-Zone",
+            detail=(
+                "Schiff zeigt Fischerei-/Loitering-Verhalten in einem OBIS-Gebiet "
+                f"mit hoher biologischer Relevanz ({sample})."
+            ),
+        )
+    return RiskReason(
+        points=10,
+        label="Arten-Hotspot",
+        detail=(
+            "Schiff bewegt sich fischereitypisch in einem OBIS-Gebiet mit "
+            f"sensiblen Arten ({sample})."
+        ),
+    )
+
+
+def rule_ghost_ship_remote_sensing(v: Vessel) -> Optional[RiskReason]:
+    """Satellite sees a hull/light cluster where AIS has no active match."""
+    if v.dark_detection_count <= 0:
+        return None
+    dist = (
+        f"{v.nearest_dark_detection_nm:.1f} nm entfernt"
+        if v.nearest_dark_detection_nm >= 0
+        else "im lokalen Suchfenster"
+    )
+    sources = ", ".join(v.dark_detection_sources) if v.dark_detection_sources else "satellite"
+    points = 45 if "sar" in v.dark_detection_sources else 35
+    return RiskReason(
+        points=points,
+        label="Ghost-Ship-Detektion",
+        detail=(
+            f"Nicht-kollaborative Satellitendetektion ({sources}) {dist}, "
+            "ohne zeitnahen AIS-Ping in derselben Rasterzelle. "
+            "Das ist ein direkter Hinweis auf ein Schiff ohne aktiven "
+            "AIS-Transponder; SAR gilt dabei als besonders starkes Signal, "
+            "weil es auch bei Nacht und Bewoelkung funktioniert."
+        ),
+        evidence_type="hard",
+    )
+
+
 # Die Regel-Registry. NEUE REGELN werden ausschliesslich hier eingetragen -
 # kein anderer Code muss angefasst werden.
 RULES: List[Rule] = [
@@ -824,6 +907,8 @@ RULES: List[Rule] = [
     rule_weather_suppression,
     rule_historical_offender,
     rule_type_mismatch,
+    rule_bio_risk_fishing,
+    rule_ghost_ship_remote_sensing,
     # Spatial / geofencing rules (proximity, skirting, sustained zone presence):
     rule_mpa_proximity,
     rule_time_in_mpa,

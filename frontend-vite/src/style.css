@@ -2,12 +2,12 @@
    SEA SHEPHERD PALETTE
    ===================================================================== */
 :root {
-  --ss-orange: #F45700;
+  --ss-orange: #f45700;
   --ss-red: #ff1053;
-  --ss-navy: #0D1B2A;
+  --ss-navy: #0d1b2a;
   --ss-teal: #0a4155;
   --ss-cyan: #32d6ff;
-  --ss-blue: #2AC4EA;
+  --ss-blue: #2ac4ea;
   --ss-black: #000000;
   --ss-white: #ffffff;
   --ss-orange-dark: #d94e00;
@@ -16,7 +16,7 @@
   --ss-skel: #111111;
   --ss-loading: #333333;
   --ss-orange-15: rgba(244, 87, 0, 0.15);
-  --ss-orange-40: rgba(244, 87, 0, 0.40);
+  --ss-orange-40: rgba(244, 87, 0, 0.4);
   --ss-orange-glow: rgba(244, 87, 0, 0.55);
   --ss-amber-15: rgba(255, 170, 0, 0.15);
   --ss-blue-15: rgba(42, 196, 234, 0.15);
@@ -90,15 +90,39 @@ h3,
   border-bottom: 2px solid var(--ss-orange);
 }
 
+/* Styling für das neue Logo-Element */
 .logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* Perfekter Abstand zwischen Logo und Text "SPYHOP" */
   font-family: "Bebas Neue", sans-serif;
   font-size: 28px;
   color: var(--ss-orange);
   line-height: 1;
 }
 
-.logo .skull {
-  margin-right: 6px;
+/* Wenn du die SVG-Variante (Option 1) nutzt: */
+.logo-svg {
+  width: 28px;
+  height: 28px;
+  color: var(--ss-orange);
+  /* Nutzt automatisch deine CSS-Variable */
+  flex-shrink: 0;
+  transition: transform var(--t);
+}
+
+.logo:hover .logo-svg {
+  transform: rotate(15deg) scale(1.1);
+  /* Kleiner taktischer Hover-Effekt */
+}
+
+/* Wenn du die Bild-Variante (Option 2) nutzt: */
+.logo-img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .subtitle {
@@ -212,7 +236,7 @@ h3,
   color: var(--ss-orange);
 }
 
-input[type=date] {
+input[type="date"] {
   background: var(--ss-black);
   border: 1px solid var(--ss-orange);
   color: var(--ss-white);
@@ -222,7 +246,7 @@ input[type=date] {
   border-radius: 2px;
 }
 
-input[type=date]::-webkit-calendar-picker-indicator {
+input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(1);
   opacity: 0.6;
   cursor: pointer;
@@ -277,7 +301,10 @@ input[type=date]::-webkit-calendar-picker-indicator {
   cursor: pointer;
   border-radius: 2px;
   line-height: 1.4;
-  transition: border-color var(--t), color var(--t), background var(--t);
+  transition:
+    border-color var(--t),
+    color var(--t),
+    background var(--t);
 }
 
 .cat-btn svg {
@@ -310,7 +337,9 @@ input[type=date]::-webkit-calendar-picker-indicator {
   padding: 10px 12px 11px;
   margin-bottom: 9px;
   cursor: pointer;
-  transition: background var(--t), box-shadow var(--t);
+  transition:
+    background var(--t),
+    box-shadow var(--t);
 }
 
 .card.hi {
@@ -446,7 +475,7 @@ input[type=date]::-webkit-calendar-picker-indicator {
 }
 
 .beh-transit {
-  background: rgba(0, 180, 80, 0.10);
+  background: rgba(0, 180, 80, 0.1);
   border: 1px solid rgba(0, 180, 80, 0.35);
   color: #00c060;
 }
@@ -500,7 +529,7 @@ input[type=date]::-webkit-calendar-picker-indicator {
 }
 
 .enc-transshipment {
-  background: rgba(255, 16, 83, 0.20);
+  background: rgba(255, 16, 83, 0.2);
   border: 1px solid rgba(255, 16, 83, 0.6);
   color: var(--ss-red);
 }
@@ -548,7 +577,7 @@ input[type=date]::-webkit-calendar-picker-indicator {
 }
 
 .traj-anomaly {
-  background: rgba(255, 16, 83, 0.20);
+  background: rgba(255, 16, 83, 0.2);
   border: 1px solid rgba(255, 16, 83, 0.6);
   color: var(--ss-red);
 }
@@ -590,7 +619,7 @@ input[type=date]::-webkit-calendar-picker-indicator {
 }
 
 .spoof-badge {
-  background: rgba(255, 16, 83, 0.30);
+  background: rgba(255, 16, 83, 0.3);
   border: 1px solid var(--ss-red);
   color: var(--ss-red);
   animation: spoof-pulse 1.1s ease-in-out infinite;
@@ -622,13 +651,13 @@ input[type=date]::-webkit-calendar-picker-indicator {
 
 .ctx-hist {
   background: rgba(255, 100, 0, 0.12);
-  border: 1px solid rgba(255, 100, 0, 0.40);
+  border: 1px solid rgba(255, 100, 0, 0.4);
   color: #ff6400;
 }
 
 .ctx-typmm {
   background: rgba(255, 16, 83, 0.18);
-  border: 1px solid rgba(255, 16, 83, 0.50);
+  border: 1px solid rgba(255, 16, 83, 0.5);
   color: var(--ss-red);
 }
 
@@ -638,7 +667,12 @@ input[type=date]::-webkit-calendar-picker-indicator {
   border-radius: 2px;
   margin-bottom: 9px;
   border-left: 3px solid var(--ss-teal);
-  background: linear-gradient(100deg, var(--ss-navy) 30%, var(--ss-skel) 50%, var(--ss-navy) 70%);
+  background: linear-gradient(
+    100deg,
+    var(--ss-navy) 30%,
+    var(--ss-skel) 50%,
+    var(--ss-navy) 70%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.2s linear infinite;
 }
@@ -715,7 +749,7 @@ input[type=date]::-webkit-calendar-picker-indicator {
   background: var(--ss-teal);
   color: var(--ss-black);
   border-color: var(--ss-teal);
-  box-shadow: 0 0 12px rgba(26, 188, 156, .4);
+  box-shadow: 0 0 12px rgba(26, 188, 156, 0.4);
 }
 
 #hex-search-btn {
@@ -735,7 +769,7 @@ input[type=date]::-webkit-calendar-picker-indicator {
   border-radius: 2px;
   padding: 9px 22px;
   cursor: pointer;
-  box-shadow: 0 4px 18px rgba(26, 188, 156, .35);
+  box-shadow: 0 4px 18px rgba(26, 188, 156, 0.35);
   transition: opacity var(--t);
 }
 
@@ -827,7 +861,7 @@ input[type=date]::-webkit-calendar-picker-indicator {
 @keyframes spoof-pulse {
   0% {
     opacity: 1;
-    transform: scale(1.0);
+    transform: scale(1);
   }
 
   50% {
@@ -837,12 +871,12 @@ input[type=date]::-webkit-calendar-picker-indicator {
 
   100% {
     opacity: 1;
-    transform: scale(1.0);
+    transform: scale(1);
   }
 }
 
 .vessel-spoofing::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: -6px;
   border: 2px solid var(--ss-red);
@@ -862,11 +896,11 @@ input[type=date]::-webkit-calendar-picker-indicator {
 }
 
 .vessel-icon.vessel-hi::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: -8px;
   border-radius: 50%;
-  border: 2px solid #F45700;
+  border: 2px solid #f45700;
   animation: pulse-orange 2s ease-out infinite;
   pointer-events: none;
 }
@@ -977,7 +1011,6 @@ a.leaflet-popup-close-button {
 
 /* ANIMATIONS */
 @keyframes blink {
-
   0%,
   100% {
     opacity: 1;
@@ -1072,7 +1105,9 @@ a.leaflet-popup-close-button {
   color: var(--ss-orange);
   border: 1px solid var(--ss-orange);
   border-right: none;
-  transition: background var(--t), color var(--t);
+  transition:
+    background var(--t),
+    color var(--t);
 }
 
 .toggle-btn:last-child {
@@ -1082,6 +1117,38 @@ a.leaflet-popup-close-button {
 .toggle-btn.active {
   background: var(--ss-orange);
   color: var(--ss-black);
+}
+
+/* Base layer dropdown */
+.base-layer-select {
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 13px;
+  letter-spacing: 1px;
+  padding: 4px 28px 4px 10px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--ss-cyan);
+  border: 1px solid var(--ss-cyan);
+  border-radius: 0;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2332d6ff'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  transition: background-color var(--t), color var(--t);
+}
+
+.base-layer-select:hover {
+  background-color: rgba(50, 214, 255, 0.12);
+}
+
+.base-layer-select option {
+  background: #0d1b2a;
+  color: #e0e0e0;
+  font-family: "Montserrat", sans-serif;
+  font-size: 12px;
+  letter-spacing: 0;
 }
 
 /* MPA */
@@ -1146,7 +1213,9 @@ a.leaflet-popup-close-button {
 }
 
 .leaflet-interactive {
-  transition: fill-opacity 350ms ease, stroke-opacity 350ms ease;
+  transition:
+    fill-opacity 350ms ease,
+    stroke-opacity 350ms ease;
 }
 
 /* ================================================================
@@ -1217,25 +1286,25 @@ a.leaflet-popup-close-button {
 }
 
 .dp-score.hi {
-  background: rgba(231, 76, 60, .2);
+  background: rgba(231, 76, 60, 0.2);
   color: var(--ss-red);
   border: 1px solid var(--ss-red);
 }
 
 .dp-score.mid {
-  background: rgba(243, 156, 18, .2);
+  background: rgba(243, 156, 18, 0.2);
   color: var(--ss-amber);
   border: 1px solid var(--ss-amber);
 }
 
 .dp-score.lo {
-  background: rgba(26, 188, 156, .15);
+  background: rgba(26, 188, 156, 0.15);
   color: var(--ss-teal);
   border: 1px solid var(--ss-teal);
 }
 
 .dp-score.unknown {
-  background: rgba(255, 255, 255, .05);
+  background: rgba(255, 255, 255, 0.05);
   color: var(--ss-muted);
   border: 1px solid var(--ss-border);
 }
@@ -1291,15 +1360,15 @@ a.leaflet-popup-close-button {
 }
 
 .dp-alert--sanctions {
-  background: rgba(231, 76, 60, .15);
+  background: rgba(231, 76, 60, 0.15);
   color: var(--ss-red);
-  border-bottom: 1px solid rgba(231, 76, 60, .3);
+  border-bottom: 1px solid rgba(231, 76, 60, 0.3);
 }
 
 .dp-alert--iuu {
-  background: rgba(230, 126, 34, .15);
+  background: rgba(230, 126, 34, 0.15);
   color: var(--ss-orange);
-  border-bottom: 1px solid rgba(230, 126, 34, .3);
+  border-bottom: 1px solid rgba(230, 126, 34, 0.3);
 }
 
 /* Sections */
@@ -1355,7 +1424,7 @@ a.leaflet-popup-close-button {
 
 .dp-stat--hot {
   border-color: var(--ss-amber);
-  background: rgba(243, 156, 18, .08);
+  background: rgba(243, 156, 18, 0.08);
 }
 
 .dp-stat-n {
@@ -1394,7 +1463,7 @@ a.leaflet-popup-close-button {
   align-items: baseline;
   font-size: 12px;
   padding: 3px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, .04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .dp-port-flag {
@@ -1419,7 +1488,7 @@ a.leaflet-popup-close-button {
   font-size: 11px;
   color: var(--ss-muted);
   padding: 3px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, .04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .dp-reason--top {
@@ -1463,7 +1532,8 @@ a.leaflet-popup-close-button {
 
 /* Performantes Marker-Blinking für getarnte Walfänger (Camouflage) */
 .vessel-marker-camouflage {
-  animation: pulse-camouflage-alert 1.2s infinite alternate cubic-bezier(0.4, 0, 0.6, 1);
+  animation: pulse-camouflage-alert 1.2s infinite alternate
+    cubic-bezier(0.4, 0, 0.6, 1);
   filter: drop-shadow(0 0 14px var(--ss-red)) !important;
 }
 
@@ -1508,4 +1578,429 @@ a.leaflet-popup-close-button {
   font-size: 14px;
   letter-spacing: 1.5px;
   color: var(--ss-cyan);
+}
+
+/* =====================================================================
+   ALERT SYSTEM — topbar button, sliding panel, cards
+   ===================================================================== */
+
+/* Topbar toggle button */
+.alert-toggle-btn {
+  position: relative;
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 14px;
+  letter-spacing: 2px;
+  padding: 4px 14px;
+  background: transparent;
+  color: var(--ss-orange);
+  border: 1px solid var(--ss-orange);
+  border-radius: 2px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition:
+    background var(--t),
+    color var(--t);
+}
+
+.alert-toggle-btn:hover,
+.alert-toggle-btn.active {
+  background: var(--ss-orange);
+  color: var(--ss-black);
+}
+
+/* Badge on the button */
+.alert-badge {
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--ss-red);
+  color: var(--ss-white);
+  font-family: "Montserrat", sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 0 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: badge-pop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.alert-badge-critical {
+  background: var(--ss-red);
+  box-shadow: 0 0 8px rgba(255, 16, 83, 0.7);
+}
+
+@keyframes badge-pop {
+  from {
+    transform: scale(0);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+/* Sliding panel — fixed on the right, above the detail panel */
+.alert-panel {
+  position: fixed;
+  top: var(--topbar-h);
+  right: 0;
+  width: 360px;
+  max-width: 100vw;
+  height: calc(100vh - var(--topbar-h));
+  background: var(--ss-navy);
+  border-left: 1px solid rgba(255, 16, 83, 0.35);
+  z-index: 1050;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 350ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.alert-panel:not([hidden]) {
+  transform: translateX(0);
+}
+
+/* Override display:none from [hidden] so the slide transition works */
+.alert-panel[hidden] {
+  display: flex !important;
+  transform: translateX(100%);
+}
+
+.alert-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 16, 83, 0.25);
+  position: sticky;
+  top: 0;
+  background: var(--ss-navy);
+  z-index: 2;
+}
+
+.alert-panel-head h2 {
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 17px;
+  letter-spacing: 2px;
+  color: var(--ss-red);
+  margin: 0;
+}
+
+.alert-panel-close {
+  background: none;
+  border: 1px solid var(--ss-border);
+  color: var(--ss-muted);
+  width: 26px;
+  height: 26px;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--t);
+}
+
+.alert-panel-close:hover {
+  border-color: var(--ss-red);
+  color: var(--ss-red);
+}
+
+/* Scrollable list */
+.alert-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.alert-empty {
+  font-size: 12px;
+  color: var(--ss-w40);
+  padding: 16px 8px;
+  text-align: center;
+}
+
+/* Individual alert cards */
+.alert-card {
+  border-radius: 2px;
+  border-left: 3px solid transparent;
+  padding: 9px 11px;
+  cursor: pointer;
+  transition: background var(--t);
+  animation: fade 0.2s ease both;
+}
+
+.alert-card:hover {
+  filter: brightness(1.12);
+}
+
+.alert-critical {
+  background: rgba(255, 16, 83, 0.1);
+  border-left-color: var(--ss-red);
+}
+
+.alert-alert {
+  background: rgba(244, 87, 0, 0.1);
+  border-left-color: var(--ss-orange);
+}
+
+.alert-warning {
+  background: rgba(255, 170, 0, 0.08);
+  border-left-color: var(--ss-amber);
+}
+
+.alert-info {
+  background: rgba(50, 214, 255, 0.06);
+  border-left-color: var(--ss-cyan);
+}
+
+.alert-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.alert-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.alert-label {
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: var(--ss-white);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.alert-age {
+  font-size: 10px;
+  color: var(--ss-w40);
+  flex-shrink: 0;
+}
+
+.alert-body {
+  display: flex;
+  gap: 8px;
+  font-size: 10.5px;
+  color: var(--ss-w60);
+  margin-bottom: 3px;
+}
+
+.alert-mmsi {
+  font-family: "Montserrat", monospace;
+  letter-spacing: 0.3px;
+}
+
+.alert-coords {
+  color: var(--ss-w40);
+}
+
+.alert-msg {
+  font-size: 10.5px;
+  color: var(--ss-w40);
+  line-height: 1.4;
+}
+
+/* =====================================================================
+   VesselX Spatial Flash — Hardware Accelerated SVG Map Glow
+   ===================================================================== */
+@keyframes hex-alert-glow {
+  0%,
+  100% {
+    fill-opacity: 0.15;
+    stroke-opacity: 0.4;
+    stroke-width: 1.5px;
+  }
+  50% {
+    fill-opacity: 0.65;
+    stroke-opacity: 1;
+    stroke-width: 3.5px;
+  }
+}
+
+/* Dynamically injected onto active map polygon target paths */
+.animate-hex-flash {
+  animation: hex-alert-glow 1.5s infinite ease-in-out;
+  fill: var(--ss-red) !important;
+  stroke: var(--ss-red) !important;
+}
+
+/* ── Auth button ─────────────────────────────────────────────────────── */
+.auth-btn {
+  background: transparent;
+  border: 1px solid var(--ss-cyan);
+  color: var(--ss-cyan);
+  font-family: 'Bebas Neue', monospace;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  padding: 4px 12px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background var(--t), color var(--t);
+  white-space: nowrap;
+}
+.auth-btn:hover {
+  background: var(--ss-cyan);
+  color: var(--ss-black);
+}
+
+/* ── Login modal ─────────────────────────────────────────────────────── */
+.login-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.82);
+  align-items: center;
+  justify-content: center;
+}
+.login-box {
+  background: #0d1b2a;
+  border: 1px solid var(--ss-cyan);
+  border-radius: 6px;
+  padding: 40px 48px;
+  min-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 0 40px rgba(50, 214, 255, 0.18);
+}
+.login-logo {
+  font-family: 'Bebas Neue', monospace;
+  font-size: 2rem;
+  color: var(--ss-cyan);
+  letter-spacing: 0.12em;
+  text-align: center;
+}
+.login-sub {
+  font-family: 'Bebas Neue', monospace;
+  font-size: 0.85rem;
+  color: var(--ss-w60);
+  letter-spacing: 0.2em;
+  text-align: center;
+  margin-top: -12px;
+}
+.login-box form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.login-box input {
+  background: #0a121c;
+  border: 1px solid rgba(50, 214, 255, 0.35);
+  border-radius: 4px;
+  color: var(--ss-white);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.9rem;
+  padding: 10px 14px;
+  letter-spacing: 0.06em;
+  outline: none;
+  transition: border-color var(--t);
+}
+.login-box input:focus {
+  border-color: var(--ss-cyan);
+}
+.login-box button[type=submit] {
+  background: var(--ss-cyan);
+  border: none;
+  border-radius: 4px;
+  color: var(--ss-black);
+  font-family: 'Bebas Neue', monospace;
+  font-size: 1.1rem;
+  letter-spacing: 0.12em;
+  padding: 10px;
+  cursor: pointer;
+  margin-top: 4px;
+  transition: opacity var(--t);
+}
+.login-box button[type=submit]:hover { opacity: 0.85; }
+.login-error {
+  color: var(--ss-red);
+  font-size: 0.8rem;
+  min-height: 1.2em;
+  text-align: center;
+}
+.login-skip {
+  text-align: center;
+}
+.login-skip button {
+  background: none;
+  border: none;
+  color: var(--ss-w40);
+  font-size: 0.75rem;
+  cursor: pointer;
+  letter-spacing: 0.08em;
+  text-decoration: underline;
+}
+
+/* ── Stats bar ───────────────────────────────────────────────────────── */
+.stats-bar {
+  position: fixed;
+  bottom: 0;
+  left: var(--sidebar-w);
+  right: 0;
+  height: 28px;
+  background: rgba(13, 27, 42, 0.88);
+  border-top: 1px solid rgba(50, 214, 255, 0.15);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 24px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.72rem;
+  color: var(--ss-w60);
+  z-index: 800;
+  letter-spacing: 0.04em;
+}
+.stats-bar .stat b { color: var(--ss-white); }
+.stats-bar .stat.hi b { color: var(--ss-red); }
+.stats-bar .stat.mid b { color: var(--ss-amber); }
+.stats-bar .stat.dark b { color: var(--ss-cyan); }
+.stats-bar .stat.mpa b { color: #a8f0a8; }
+
+/* ── Overlay panel ───────────────────────────────────────────────────── */
+.overlay-panel {
+  position: fixed;
+  bottom: 40px;
+  right: 16px;
+  background: rgba(13, 27, 42, 0.92);
+  border: 1px solid rgba(50, 214, 255, 0.25);
+  border-radius: 6px;
+  padding: 12px 16px;
+  z-index: 810;
+  min-width: 190px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.78rem;
+  color: var(--ss-white);
+}
+.overlay-title {
+  font-family: 'Bebas Neue', monospace;
+  font-size: 0.8rem;
+  letter-spacing: 0.15em;
+  color: var(--ss-cyan);
+  margin-bottom: 8px;
+}
+.overlay-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  cursor: pointer;
+  color: var(--ss-w70);
+}
+.overlay-row input[type=checkbox] {
+  accent-color: var(--ss-cyan);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
 }

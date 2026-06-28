@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 from spyhop.config import get_settings  # noqa: E402
 from spyhop.db.engine import Base  # noqa: E402
 import spyhop.db.models  # noqa: F401 — ensures models are registered on Base.metadata
+import vesselx.core_db.models  # noqa: F401 — registers VesselXAlert + FieldDeployment
 
 settings = get_settings()
 

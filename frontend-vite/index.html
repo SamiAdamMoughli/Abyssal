@@ -15,12 +15,26 @@
       <div class="subtitle">MISSION RADAR</div>
       <div class="topbar-spacer"></div>
       <div id="status-pill" class="pill syn"><span class="dot"></span><span id="status-text">CONNECTING</span></div>
+      <button id="auth-btn" class="auth-btn" title="Authenticate as operator">⚿ LOGIN</button>
       <div class="toggle-group">
         <button class="toggle-btn" data-mode="vessels">🚢 VESSELS</button>
         <button class="toggle-btn" data-mode="mpas">🛡 MPAs</button>
         <button class="toggle-btn active" data-mode="both">⊕ BOTH</button>
       </div>
+      <select id="base-layer-select" class="base-layer-select" aria-label="Base map layer">
+        <option value="dark">🌑 DARK MATTER</option>
+        <option value="satellite">🛰 SATELLITE</option>
+        <option value="bathymetric">🌊 BATHYMETRIC</option>
+        <option value="terrain">⛰ TERRAIN</option>
+        <option value="osm">🗺 STREET MAP</option>
+        <option value="noaa">⚓ NOAA NAUTICAL</option>
+      </select>
       <div class="count"><b id="vessel-count">—</b> vessels<span id="mpa-count"></span></div>
+      <!-- Alert toggle -->
+      <button id="alert-toggle-btn" class="alert-toggle-btn" aria-label="Toggle alert panel">
+        ⚡ ALERTS
+        <span id="alert-badge" class="alert-badge" style="display:none"></span>
+      </button>
     </header>
 
     <aside id="sidebar">
@@ -71,6 +85,33 @@
   <!-- VESSEL DETAIL PANEL -->
   <div id="detail-panel">
     <div id="detail-content"></div>
+  </div>
+
+  <!-- ALERT SIDEBAR -->
+  <div id="alert-panel" class="alert-panel" hidden>
+    <div class="alert-panel-head">
+      <h2>⚡ LIVE ALERTS</h2>
+      <button id="alert-panel-close" class="alert-panel-close" aria-label="Close alert panel">✕</button>
+    </div>
+    <div id="alert-list" class="alert-list">
+      <div class="alert-empty">No alerts — all clear.</div>
+    </div>
+  </div>
+
+  <!-- STATS BAR -->
+  <div id="stats-bar" class="stats-bar"></div>
+
+  <!-- OVERLAY CONTROLS -->
+  <div id="overlay-panel" class="overlay-panel">
+    <div class="overlay-title">OVERLAYS</div>
+    <label class="overlay-row">
+      <input type="checkbox" id="overlay-heatmap" />
+      <span>🔥 Vessel density heatmap</span>
+    </label>
+    <label class="overlay-row">
+      <input type="checkbox" id="overlay-weather" />
+      <span>🌬 Wind overlay</span>
+    </label>
   </div>
 
   <div id="error-banner"></div>

@@ -1,62 +1,115 @@
 import 'leaflet/dist/leaflet.css';
 import './style.css';
-import L from 'leaflet';
-
-import { state } from './state.js';
-import { fmtDate } from './utils.js';
-import { loadData, currentDates } from './api.js';
-import { renderCards } from './ui.js';
-import { getVisibleVessels } from './vessels.js';
+import { state } from "./state.js";
+import { fmtDate } from "./utils.js";
+import { loadData, currentDates } from "./api.js";
+import { renderCards } from "./ui.js";
+import { getVisibleVessels } from "./vessels.js";
 import {
-  renderHexGrid, clearHexGrid, loadFromHexSelection, hasSelection,
-} from './h3grid.js';
+  renderHexGrid,
+  clearHexGrid,
+  loadFromHexSelection,
+  hasSelection,
+} from "./h3grid.js";
+import { initAlerts } from "./alerts.js";
+import { toggleHeatmap, toggleWeather, refreshStatsBar } from "./overlays.js";
+import { initAuth } from "./auth.js";
 
 // ==================================================================
 // MAP INIT
 // ==================================================================
-state.map         = L.map('map', { zoomControl: true }).setView([-0.5, -90.5], 7);
+state.map = L.map("map", { zoomControl: true }).setView([-0.5, -90.5], 7);
 state.markerLayer = L.layerGroup().addTo(state.map);
-state.ringLayer   = L.layerGroup().addTo(state.map);
-state.gapLayer    = L.layerGroup().addTo(state.map);
-state.mpaLayer    = L.layerGroup().addTo(state.map);
+state.ringLayer = L.layerGroup().addTo(state.map);
+state.gapLayer = L.layerGroup().addTo(state.map);
+state.mpaLayer = L.layerGroup().addTo(state.map);
 
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-  attribution: '&copy; OpenStreetMap &copy; CARTO',
-  maxZoom: 19,
-  crossOrigin: '',
-}).addTo(state.map);
+// ==================================================================
+// BASE LAYERS
+// ==================================================================
+const BASE_LAYERS = {
+  dark: L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+    attribution: "&copy; OpenStreetMap &copy; CARTO",
+    maxZoom: 19,
+  }),
+  satellite: L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+    attribution: "&copy; Esri, Maxar, Earthstar Geographics",
+    maxZoom: 19,
+  }),
+  bathymetric: L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}", {
+    attribution: "&copy; Esri, GEBCO, NOAA",
+    maxZoom: 13,
+  }),
+  terrain: L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}", {
+    attribution: "&copy; Esri, USGS, NOAA",
+    maxZoom: 13,
+  }),
+  osm: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "&copy; OpenStreetMap contributors",
+    maxZoom: 19,
+  }),
+  noaa: L.tileLayer("https://tileservice.charts.noaa.gov/tiles/50000_1/{z}/{x}/{y}.png", {
+    attribution: "&copy; NOAA",
+    maxZoom: 16,
+    opacity: 0.9,
+  }),
+};
+
+let _activeBase = "dark";
+BASE_LAYERS.dark.addTo(state.map);
+
+function setBaseLayer(name) {
+  if (name === _activeBase || !BASE_LAYERS[name]) return;
+  BASE_LAYERS[_activeBase].remove();
+  BASE_LAYERS[name].addTo(state.map);
+  [state.mpaLayer, state.gapLayer, state.ringLayer, state.markerLayer]
+    .forEach(l => l.bringToFront?.());
+  _activeBase = name;
+}
 
 // Loading overlay (created dynamically so the HTML stays clean)
-const ov = document.createElement('div');
-ov.id = 'map-overlay';
-ov.className = 'map-overlay';
-ov.innerHTML = '<div class="spinner"></div><div>CONNECTING TO DATA SOURCE…</div>';
-document.getElementById('map').appendChild(ov);
+const ov = document.createElement("div");
+ov.id = "map-overlay";
+ov.className = "map-overlay";
+ov.innerHTML =
+  '<div class="spinner"></div><div>CONNECTING TO DATA SOURCE…</div>';
+document.getElementById("map").appendChild(ov);
 
 // ==================================================================
 // DATE PICKER — default: last 7 days
 // ==================================================================
 (function initDates() {
-  const to   = new Date();
+  const to = new Date();
   const from = new Date(Date.now() - 7 * 864e5);
-  document.getElementById('date-to').value   = fmtDate(to);
-  document.getElementById('date-from').value = fmtDate(from);
+  document.getElementById("date-to").value = fmtDate(to);
+  document.getElementById("date-from").value = fmtDate(from);
 })();
 
 // ==================================================================
 // LAYER TOGGLE
 // ==================================================================
 function applyMode(mode) {
-  const showV = mode === 'vessels' || mode === 'both';
-  const showM = mode === 'mpas'    || mode === 'both';
-  [state.markerLayer, state.ringLayer].forEach(l =>
-    showV ? state.map.addLayer(l) : state.map.removeLayer(l));
-  showM ? state.map.addLayer(state.mpaLayer) : state.map.removeLayer(state.mpaLayer);
-  document.querySelectorAll('.toggle-btn').forEach(b =>
-    b.classList.toggle('active', b.dataset.mode === mode));
+  const showV = mode === "vessels" || mode === "both";
+  const showM = mode === "mpas" || mode === "both";
+  [state.markerLayer, state.ringLayer].forEach((l) =>
+    showV ? state.map.addLayer(l) : state.map.removeLayer(l),
+  );
+  showM
+    ? state.map.addLayer(state.mpaLayer)
+    : state.map.removeLayer(state.mpaLayer);
+  document
+    .querySelectorAll(".toggle-btn")
+    .forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
 }
-document.querySelectorAll('.toggle-btn').forEach(btn =>
-  btn.addEventListener('click', () => applyMode(btn.dataset.mode)));
+document
+  .querySelectorAll(".toggle-btn")
+  .forEach((btn) =>
+    btn.addEventListener("click", () => applyMode(btn.dataset.mode)),
+  );
+
+document
+  .getElementById("base-layer-select")
+  .addEventListener("change", (e) => setBaseLayer(e.target.value));
 
 // ==================================================================
 // SEARCH THIS AREA
@@ -65,12 +118,15 @@ function searchThisArea() {
   const b = state.map.getBounds();
   const d = currentDates();
   loadData({
-    min_lat: b.getSouth(), max_lat: b.getNorth(),
-    min_lon: b.getWest(), max_lon: b.getEast(),
-    start: d.start, end: d.end,
+    min_lat: b.getSouth(),
+    max_lat: b.getNorth(),
+    min_lon: b.getWest(),
+    max_lon: b.getEast(),
+    start: d.start,
+    end: d.end,
   });
 }
-document.getElementById('search-btn').addEventListener('click', searchThisArea);
+document.getElementById("search-btn").addEventListener("click", searchThisArea);
 
 // ==================================================================
 // HEX GRID MODE
@@ -79,12 +135,12 @@ let _hexModeActive = false;
 
 function setHexMode(active) {
   _hexModeActive = active;
-  const hexBtn    = document.getElementById('hex-mode-btn');
-  const searchBtn = document.getElementById('hex-search-btn');
-  const normalBtn = document.getElementById('search-btn');
-  hexBtn.classList.toggle('active', active);
-  searchBtn.style.display = active ? 'inline-flex' : 'none';
-  normalBtn.style.display = active ? 'none' : 'inline-flex';
+  const hexBtn = document.getElementById("hex-mode-btn");
+  const searchBtn = document.getElementById("hex-search-btn");
+  const normalBtn = document.getElementById("search-btn");
+  hexBtn.classList.toggle("active", active);
+  searchBtn.style.display = active ? "inline-flex" : "none";
+  normalBtn.style.display = active ? "none" : "inline-flex";
   if (active) {
     renderHexGrid();
   } else {
@@ -92,42 +148,77 @@ function setHexMode(active) {
   }
 }
 
-document.getElementById('hex-mode-btn')
-  .addEventListener('click', () => setHexMode(!_hexModeActive));
+document
+  .getElementById("hex-mode-btn")
+  .addEventListener("click", () => setHexMode(!_hexModeActive));
 
-document.getElementById('hex-search-btn')
-  .addEventListener('click', () => {
-    if (hasSelection()) loadFromHexSelection();
-  });
+document.getElementById("hex-search-btn").addEventListener("click", () => {
+  if (hasSelection()) loadFromHexSelection();
+});
 
 // ==================================================================
 // SIDEBAR CONTROLS
 // ==================================================================
-document.getElementById('search-input').addEventListener('input', e => {
+document.getElementById("search-input").addEventListener("input", (e) => {
   state.currentFilter = e.target.value.trim();
   renderCards();
-  document.getElementById('sidebar-sub').textContent =
+  document.getElementById("sidebar-sub").textContent =
     `Showing ${getVisibleVessels().length} of ${state.vesselsCache.length} vessels`;
 });
 
-document.getElementById('sort-select').addEventListener('change', e => {
+document.getElementById("sort-select").addEventListener("change", (e) => {
   state.currentSort = e.target.value;
   renderCards();
-  document.getElementById('sidebar-sub').textContent =
+  document.getElementById("sidebar-sub").textContent =
     `Showing ${getVisibleVessels().length} of ${state.vesselsCache.length} vessels`;
 });
 
-document.getElementById('cat-filters').addEventListener('click', e => {
-  const btn = e.target.closest('.cat-btn');
+// ==================================================================
+// EMERGENCY SLIDING PANEL TOGGLES
+// ==================================================================
+const alertToggleBtn = document.querySelector(".alert-toggle-btn");
+const alertPanel =
+  document.getElementById("alert-panel") ||
+  document.querySelector(".alert-panel");
+const alertCloseBtn = document.querySelector(".alert-panel-close");
+
+if (alertToggleBtn && alertPanel) {
+  alertToggleBtn.addEventListener("click", () => {
+    const isHidden = alertPanel.hasAttribute("hidden");
+    if (isHidden) {
+      alertPanel.removeAttribute("hidden");
+      alertToggleBtn.classList.add("active");
+    } else {
+      alertPanel.setAttribute("hidden", "");
+      alertToggleBtn.classList.remove("active");
+    }
+  });
+}
+
+if (alertCloseBtn && alertPanel && alertToggleBtn) {
+  alertCloseBtn.addEventListener("click", () => {
+    alertPanel.setAttribute("hidden", "");
+    alertToggleBtn.classList.remove("active");
+  });
+}
+
+document.getElementById("cat-filters").addEventListener("click", (e) => {
+  const btn = e.target.closest(".cat-btn");
   if (!btn) return;
   const cat = btn.dataset.cat;
-  state.currentCatFilter = (cat === state.currentCatFilter && cat !== 'all') ? 'all' : cat;
-  document.querySelectorAll('.cat-btn').forEach(b =>
-    b.classList.toggle('active',
-      b.dataset.cat === state.currentCatFilter ||
-      (state.currentCatFilter === 'all' && b.dataset.cat === 'all')));
+  state.currentCatFilter =
+    cat === state.currentCatFilter && cat !== "all" ? "all" : cat;
+  document
+    .querySelectorAll(".cat-btn")
+    .forEach((b) =>
+      b.classList.toggle(
+        "active",
+        b.dataset.cat === state.currentCatFilter ||
+          (state.currentCatFilter === "all" && b.dataset.cat === "all"),
+      ),
+    );
   renderCards();
-  document.getElementById('sidebar-sub').textContent =
+  document.getElementById("sidebar-sub").textContent =
     `Showing ${getVisibleVessels().length} of ${state.vesselsCache.length} vessels`;
 });
 
@@ -136,14 +227,15 @@ document.getElementById('cat-filters').addEventListener('click', e => {
 // ==================================================================
 function maybeShowButton() {
   if (state.ready && !_hexModeActive)
-    document.getElementById('search-btn').classList.add('show');
+    document.getElementById("search-btn").classList.add("show");
 }
 function updateAreaWarning() {
-  const b    = state.map.getBounds();
+  const b = state.map.getBounds();
   const span = Math.max(b.getNorth() - b.getSouth(), b.getEast() - b.getWest());
-  document.getElementById('area-warn').style.display = span > 15 ? 'block' : 'none';
+  document.getElementById("area-warn").style.display =
+    span > 15 ? "block" : "none";
 }
-state.map.on('moveend', () => {
+state.map.on("moveend", () => {
   maybeShowButton();
   updateAreaWarning();
   if (_hexModeActive) renderHexGrid();
@@ -155,9 +247,23 @@ state.map.on('moveend', () => {
 (async () => {
   const b = state.map.getBounds();
   await loadData({
-    min_lat: b.getSouth(), max_lat: b.getNorth(),
-    min_lon: b.getWest(),  max_lon: b.getEast(),
+    min_lat: b.getSouth(),
+    max_lat: b.getNorth(),
+    min_lon: b.getWest(),
+    max_lon: b.getEast(),
   });
   state.ready = true;
   setHexMode(true);
+
+  initAlerts();
+  initAuth();
+  await refreshStatsBar();
+
+  // Overlay toggle wiring
+  document.getElementById("overlay-heatmap")?.addEventListener("change", (e) => {
+    toggleHeatmap(e.target.checked);
+  });
+  document.getElementById("overlay-weather")?.addEventListener("change", (e) => {
+    toggleWeather(e.target.checked);
+  });
 })();

@@ -75,22 +75,69 @@ class VesselRepository:
     async def get_h3_vessel_counts(
         self,
         h3_ids: list[str],
+        display_resolution: int = 7,
     ) -> dict[str, int]:
         """Return {h3_index: vessel_count} for the requested cells.
 
-        Used by the frontend grid layer to colour-code hexagons by density.
+        VesselPosition stores h3_index at resolution 7. When display_resolution
+        differs (e.g. 5 for larger visual hexes), expand each display cell into
+        its resolution-7 children, query those, then re-aggregate to the parent.
         """
         if not h3_ids:
             return {}
-        from sqlalchemy import Integer, case, func as sqlfunc
+
+        _STORED_RES = 7
+
+        if display_resolution == _STORED_RES:
+            stmt = (
+                select(VesselPosition.h3_index, func.count().label("n"))
+                .where(VesselPosition.h3_index.in_(h3_ids))
+                .group_by(VesselPosition.h3_index)
+            )
+            result = await self.session.execute(stmt)
+            return {row.h3_index: row.n for row in result}
+
+        # Coarser display resolution: expand each parent to its res-7 children,
+        # query those, then sum back up to the parent cell.
+        # Guard: 7^(7-res) children per cell — cap at res 3 to keep IN clause
+        # manageable (res 3 → 343 children/cell; res 1 → 117K children/cell).
+        import h3 as h3lib
+
+        if display_resolution < 3:
+            # Gap too large for child expansion — count all stored cells whose
+            # res-N parent is in h3_ids, using h3_to_parent per row in Python.
+            all_rows = await self.session.execute(
+                select(VesselPosition.h3_index, func.count().label("n"))
+                .group_by(VesselPosition.h3_index)
+            )
+            h3_id_set = set(h3_ids)
+            counts: dict[str, int] = {}
+            for row in all_rows:
+                try:
+                    parent = h3lib.cell_to_parent(row.h3_index, display_resolution)
+                except Exception:
+                    continue
+                if parent in h3_id_set:
+                    counts[parent] = counts.get(parent, 0) + row.n
+            return counts
+
+        child_to_parent: dict[str, str] = {}
+        for parent_id in h3_ids:
+            for child in h3lib.cell_to_children(parent_id, _STORED_RES):
+                child_to_parent[child] = parent_id
 
         stmt = (
-            select(VesselPosition.h3_index, sqlfunc.count().label("n"))
-            .where(VesselPosition.h3_index.in_(h3_ids))
+            select(VesselPosition.h3_index, func.count().label("n"))
+            .where(VesselPosition.h3_index.in_(list(child_to_parent)))
             .group_by(VesselPosition.h3_index)
         )
         result = await self.session.execute(stmt)
-        return {row.h3_index: row.n for row in result}
+
+        counts = {}
+        for row in result:
+            parent = child_to_parent[row.h3_index]
+            counts[parent] = counts.get(parent, 0) + row.n
+        return counts
 
     async def get_vessels_near_point(
         self,

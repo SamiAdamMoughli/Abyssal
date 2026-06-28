@@ -26,7 +26,9 @@ from ..data_cache import get_or_fetch
 
 SOURCE = "eez"
 MAX_AGE_H = 720.0
-_LOCAL = Path(__file__).resolve().parent.parent.parent / "data" / "sources" / "eez.geojson"
+_LOCAL = (
+    Path(__file__).resolve().parent.parent.parent / "data" / "sources" / "eez.geojson"
+)
 
 # In-Memory: Liste (sovereign_iso3, prepared_geometry) - lazy gebaut.
 _polys: Optional[List[Tuple[str, Any]]] = None

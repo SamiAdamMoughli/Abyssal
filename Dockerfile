@@ -1,5 +1,5 @@
 # =============================================================================
-# Mission Radar (Spyhop) — Multi-Stage Dockerfile
+# VesselX — Multi-Stage Dockerfile
 #
 # Stage 1 (builder):  Install all dependencies into an isolated prefix.
 # Stage 2 (final):    Minimal python:3.12-slim image running as non-root.
@@ -74,9 +74,9 @@ USER spyhop
 # Expose the API port (workers don't expose any)
 EXPOSE 8000
 
-# Default command: run the FastAPI server.
+# Default command: run the VesselX spatial engine API.
 # Override in docker-compose.yml for worker / beat / flower.
-CMD ["uvicorn", "spyhop.api.main:app", \
+CMD ["uvicorn", "vesselx.spatial_engine.app:app", \
      "--host", "0.0.0.0", \
      "--port", "8000", \
      "--workers", "4", \

@@ -65,6 +65,7 @@ async def close_pool() -> None:
 
 VESSEL_SCORES_KEY = "vessel:scores"
 VESSEL_UPDATES_CHANNEL = "vessel:updates"
+VESSEL_ALERTS_CHANNEL = "vessel:alerts"
 
 
 class RedisClient:

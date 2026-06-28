@@ -1,20 +1,21 @@
 version: "3.9"
 
-# ===========================================================================
-# Mission Radar (Spyhop) — Production-Ready Docker Compose
-# Services: api · worker · beat · db (PostGIS) · redis · flower
-# ===========================================================================
+# VesselX - All-Source Maritime C4ISR System
+# Independent services coordinate through Redis queues/PubSub and PostGIS.
 
 x-common-env: &common-env
-  DATABASE_URL: "postgresql+asyncpg://spyhop:spyhop@db:5432/spyhop"
-  SYNC_DATABASE_URL: "postgresql+psycopg2://spyhop:spyhop@db:5432/spyhop"
-  REDIS_URL: "redis://redis:6379/0"
-  CELERY_BROKER_URL: "redis://redis:6379/1"
-  CELERY_RESULT_BACKEND: "redis://redis:6379/2"
+  APP_NAME: "VesselX"
+  DATABASE_URL: "postgresql+asyncpg://vesselx:vesselx@vesselx-core-db:5432/vesselx"
+  SYNC_DATABASE_URL: "postgresql+psycopg2://vesselx:vesselx@vesselx-core-db:5432/vesselx"
+  SHIPBOARD_DATABASE_URL: "postgresql+asyncpg://vesselx:vesselx@vesselx-shipboard-store:5432/vesselx_shipboard"
+  SYNC_SHIPBOARD_DATABASE_URL: "postgresql+psycopg2://vesselx:vesselx@vesselx-shipboard-store:5432/vesselx_shipboard"
+  REDIS_URL: "redis://vesselx-telemetry-cache:6379/0"
+  CELERY_BROKER_URL: "redis://vesselx-telemetry-cache:6379/1"
+  CELERY_RESULT_BACKEND: "redis://vesselx-telemetry-cache:6379/2"
   LOG_LEVEL: "INFO"
   PYTHONPATH: "/app/src:/app"
 
-x-app-base: &app-base
+x-vesselx-base: &vesselx-base
   build:
     context: .
     dockerfile: Dockerfile
@@ -24,74 +25,107 @@ x-app-base: &app-base
     - .env
   restart: unless-stopped
   depends_on:
-    db:
+    vesselx-core-db:
       condition: service_healthy
-    redis:
+    vesselx-telemetry-cache:
       condition: service_healthy
+  networks:
+    - vesselx_net
 
 services:
-  # ---------------------------------------------------------------------------
-  # PostgreSQL + PostGIS  (primary datastore, spatial queries)
-  # ---------------------------------------------------------------------------
-  db:
+  vesselx-core-db:
     image: kartoza/postgis:16-3.4
-    container_name: spyhop_db
+    container_name: vesselx-core-db
     environment:
-      POSTGRES_USER: spyhop
-      POSTGRES_PASSWORD: spyhop
-      POSTGRES_DB: spyhop
+      POSTGRES_USER: vesselx
+      POSTGRES_PASSWORD: vesselx
+      POSTGRES_DB: vesselx
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - vesselx_pgdata:/var/lib/postgresql/data
       - ./src/spyhop/db/migrations/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U spyhop -d spyhop"]
+      test: ["CMD-SHELL", "pg_isready -U vesselx -d vesselx"]
       interval: 5s
       timeout: 5s
       retries: 10
       start_period: 10s
-    deploy:
-      resources:
-        limits:
-          cpus: "2.0"
-          memory: "2G"
-        reservations:
-          memory: "512M"
     networks:
-      - spyhop_net
+      - vesselx_net
 
-  # ---------------------------------------------------------------------------
-  # Redis  (cache, PubSub, Celery broker/result backend)
-  # ---------------------------------------------------------------------------
-  redis:
-    image: redis:7-alpine
-    container_name: spyhop_redis
-    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly no
+  vesselx-shipboard-store:
+    image: kartoza/postgis:16-3.4
+    container_name: vesselx-shipboard-store
+    environment:
+      POSTGRES_USER: vesselx
+      POSTGRES_PASSWORD: vesselx
+      POSTGRES_DB: vesselx_shipboard
     volumes:
-      - redisdata:/data
+      - vesselx_shipboard_pgdata:/var/lib/postgresql/data
+      - ./src/spyhop/db/migrations/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vesselx -d vesselx_shipboard"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    profiles:
+      - shipboard
+    networks:
+      - vesselx_net
+
+  vesselx-telemetry-cache:
+    image: redis:7-alpine
+    container_name: vesselx-telemetry-cache
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly yes
+    volumes:
+      - vesselx_redisdata:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
       start_period: 5s
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: "512M"
-        reservations:
-          memory: "64M"
     networks:
-      - spyhop_net
+      - vesselx_net
 
-  # ---------------------------------------------------------------------------
-  # FastAPI  (async API server via uvicorn)
-  # ---------------------------------------------------------------------------
-  api:
-    <<: *app-base
-    container_name: spyhop_api
+  vesselx-gateway:
+    <<: *vesselx-base
+    container_name: vesselx-gateway
+    command: python -m vesselx.gateway.runner
+    depends_on:
+      vesselx-telemetry-cache:
+        condition: service_healthy
+      vesselx-shipboard-store:
+        condition: service_healthy
+        required: false
+    profiles:
+      - live
+      - shipboard
+
+  vesselx-gateway-api:
+    <<: *vesselx-base
+    container_name: vesselx-gateway-api
     command: >
-      uvicorn spyhop.api.main:app
+      uvicorn vesselx.gateway.app:app
+      --host 0.0.0.0
+      --port 8010
+      --log-level info
+    ports:
+      - "8010:8010"
+    profiles:
+      - live
+      - shipboard
+
+  vesselx-spatial-worker:
+    <<: *vesselx-base
+    container_name: vesselx-spatial-worker
+    command: python -m vesselx.spatial_worker.worker
+
+  vesselx-spatial-engine:
+    <<: *vesselx-base
+    container_name: vesselx-spatial-engine
+    command: >
+      uvicorn vesselx.spatial_engine.app:app
       --host 0.0.0.0
       --port 8000
       --workers 4
@@ -100,116 +134,76 @@ services:
       --log-level info
     ports:
       - "8000:8000"
-    deploy:
-      resources:
-        limits:
-          cpus: "2.0"
-          memory: "1G"
-        reservations:
-          memory: "256M"
-    networks:
-      - spyhop_net
 
-  # ---------------------------------------------------------------------------
-  # Celery Worker  (async task execution)
-  # ---------------------------------------------------------------------------
-  worker:
-    <<: *app-base
-    container_name: spyhop_worker
+  vesselx-brain:
+    <<: *vesselx-base
+    container_name: vesselx-brain
     command: >
       celery -A spyhop.worker.celery_app worker
       --loglevel=info
       --concurrency=4
       --queues=default,scoring,sync
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          cpus: "2.0"
-          memory: "1G"
-        reservations:
-          memory: "256M"
-    networks:
-      - spyhop_net
 
-  # ---------------------------------------------------------------------------
-  # Celery Beat  (cron scheduler)
-  # ---------------------------------------------------------------------------
-  beat:
-    <<: *app-base
-    container_name: spyhop_beat
+  vesselx-sync-worker:
+    <<: *vesselx-base
+    container_name: vesselx-sync-worker
     command: >
       celery -A spyhop.worker.celery_app beat
       --loglevel=info
       --scheduler celery.beat.PersistentScheduler
       --schedule /tmp/celerybeat-schedule
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          cpus: "0.25"
-          memory: "256M"
-    networks:
-      - spyhop_net
 
-  # ---------------------------------------------------------------------------
-  # AIS Stream Worker  (Worker 1 — live WebSocket ingestion)
-  # ---------------------------------------------------------------------------
-  ais_stream:
-    <<: *app-base
-    container_name: spyhop_ais_stream
-    command: python -m spyhop.worker.ais_stream
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: "256M"
-    networks:
-      - spyhop_net
+  vesselx-analytics-engine:
+    <<: *vesselx-base
+    container_name: vesselx-analytics-engine
+    command: >
+      uvicorn vesselx.analytics_engine.app:app
+      --host 0.0.0.0
+      --port 8001
+      --workers 2
+      --loop uvloop
+      --http httptools
+      --log-level info
+    ports:
+      - "8001:8001"
+
+  vesselx-brain-api:
+    <<: *vesselx-base
+    container_name: vesselx-brain-api
+    command: >
+      uvicorn vesselx.brain.app:app
+      --host 0.0.0.0
+      --port 8020
+      --log-level info
+    ports:
+      - "8020:8020"
     profiles:
-      - live   # only starts with: docker compose --profile live up
+      - ops
 
-  # ---------------------------------------------------------------------------
-  # Enrichment Manager  (Worker 2 — throttled API fallback chain)
-  # ---------------------------------------------------------------------------
-  enrichment_manager:
-    <<: *app-base
-    container_name: spyhop_enrichment
-    command: python -m spyhop.worker.enrichment_manager
+  vesselx-desktop-client:
+    image: node:20-alpine
+    container_name: vesselx-desktop-client
+    working_dir: /app
+    environment:
+      VITE_API_URL: "http://localhost:8000"
+    volumes:
+      - ./frontend-vite:/app
+      - vesselx_desktop_node_modules:/app/node_modules
+      - vesselx_vector_tiles:/offline/vector-tiles
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
+    ports:
+      - "5173:5173"
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          cpus: "0.25"
-          memory: "128M"
-    networks:
-      - spyhop_net
+      - vesselx-spatial-engine
     profiles:
-      - live   # only starts with: docker compose --profile live up
+      - client
+      - shipboard
+    networks:
+      - vesselx_net
 
-  # ---------------------------------------------------------------------------
-  # Flower  (Celery monitoring UI at :5555)
-  # ---------------------------------------------------------------------------
-  flower:
-    <<: *app-base
-    container_name: spyhop_flower
+  vesselx-ops-flower:
+    <<: *vesselx-base
+    container_name: vesselx-ops-flower
     command: >
       celery -A spyhop.worker.celery_app flower
       --port=5555
@@ -217,19 +211,18 @@ services:
     ports:
       - "5555:5555"
     depends_on:
-      - redis
-    deploy:
-      resources:
-        limits:
-          cpus: "0.25"
-          memory: "256M"
-    networks:
-      - spyhop_net
+      vesselx-telemetry-cache:
+        condition: service_healthy
+    profiles:
+      - ops
 
 volumes:
-  pgdata:
-  redisdata:
+  vesselx_pgdata:
+  vesselx_shipboard_pgdata:
+  vesselx_redisdata:
+  vesselx_desktop_node_modules:
+  vesselx_vector_tiles:
 
 networks:
-  spyhop_net:
+  vesselx_net:
     driver: bridge
