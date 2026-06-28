@@ -77,7 +77,145 @@ VESSEL_UPDATES_CHANNEL = "vessel:updates"
 
 
 # ---------------------------------------------------------------------------
-# Task: fetch_and_score_vessels
+# Task: fetch_gfw_vessels  (replaces the broken fetch_and_score_vessels)
+# ---------------------------------------------------------------------------
+
+@celery_app.task(
+    name="spyhop.worker.tasks.fetch_gfw_vessels",
+    bind=True,
+    max_retries=3,
+    default_retry_delay=60,
+    soft_time_limit=180,
+    time_limit=240,
+)
+def fetch_gfw_vessels(self: Any) -> dict[str, Any]:
+    """Fetch recent vessel positions from GFW and upsert to PostGIS + Redis.
+
+    Calls /v3/events for the last 24 h, deduplicates by MMSI, applies a simple
+    rule-based risk score from vesselx.brain.rules, and persists results.
+    """
+    import time as _time
+
+    from vesselx.brain.rules import RULES, Severity
+
+    t0 = _time.monotonic()
+
+    try:
+        from spyhop.sources.gfw import fetch_recent_vessels
+        vessels = fetch_recent_vessels(hours=24, limit=2000)
+    except Exception as exc:
+        log.exception("fetch_gfw_vessels: GFW API call failed: %s", exc)
+        raise self.retry(exc=exc)
+
+    if not vessels:
+        log.warning("fetch_gfw_vessels: no vessels returned from GFW")
+        return {"status": "ok", "vessels": 0}
+
+    log.info("fetch_gfw_vessels: fetched %d vessels from GFW", len(vessels))
+
+    now_utc = datetime.now(timezone.utc)
+    rows: list[dict[str, Any]] = []
+    score_map: dict[str, float] = {}
+
+    for v in vessels:
+        # Simple rule-based scoring: count triggered rule weights
+        state = {
+            "mmsi":            v["mmsi"],
+            "lat":             v["lat"],
+            "lon":             v["lon"],
+            "flag":            v.get("flag", "UNK"),
+            "vessel_type":     v.get("vessel_type", "fishing"),
+            "speed_knots":     v.get("speed_knots", 0.0),
+            "ais_gap_hours":   6.0 if v.get("_ev_type") == "gap" else 0.0,
+            "loitering_hours": 2.0 if v.get("_ev_type") == "loitering" else 0.0,
+            "in_protected_area": False,
+            "behavior_status": "loitering" if v.get("_ev_type") == "loitering" else "unknown",
+            "behavior_confidence": 0.8,
+            "border_skirting": False,
+            "rendezvous_duration_hours": 1.0 if v.get("_ev_type") == "encounter" else 0.0,
+        }
+
+        weights = {
+            Severity.CRITICAL: 40,
+            Severity.ALERT:    25,
+            Severity.WARNING:  15,
+            Severity.INFO:      5,
+        }
+        raw_score = 0.0
+        triggered: list[dict] = []
+        for rule in RULES:
+            try:
+                if rule.predicate(state):
+                    raw_score += weights.get(rule.severity, 5)
+                    triggered.append({
+                        "points": weights.get(rule.severity, 5),
+                        "label":  rule.label,
+                        "detail": rule.message(state),
+                        "evidence_type": rule.id,
+                    })
+            except Exception:
+                pass
+
+        risk_score = min(raw_score / 100.0, 1.0)
+        top_reason = triggered[0]["label"] if triggered else None
+        cell = h3.latlng_to_cell(v["lat"], v["lon"], 7)
+
+        rows.append({
+            "mmsi":                      v["mmsi"],
+            "name":                      v.get("name", ""),
+            "flag":                      v.get("flag", "UNK"),
+            "vessel_type":               v.get("vessel_type", "fishing"),
+            "lat":                       v["lat"],
+            "lon":                       v["lon"],
+            "speed_knots":               v.get("speed_knots", 0.0),
+            "ais_gap_hours":             state["ais_gap_hours"],
+            "loitering_hours":           state["loitering_hours"],
+            "in_protected_area":         False,
+            "recent_port_calls":         -1,
+            "days_since_port":           -1.0,
+            "distance_to_nearest_port_nm": -1.0,
+            "nearby_fishing_vessels":    0,
+            "rendezvous_duration_hours": state["rendezvous_duration_hours"],
+            "ais_vessel_class":          "",
+            "behavior_status":           state["behavior_status"],
+            "behavior_confidence":       state["behavior_confidence"],
+            "cog_degrees":               -1.0,
+            "nearest_mpa_nm":            -1.0,
+            "h3_index":                  cell,
+            "risk_score":                risk_score,
+            "top_reason_label":          top_reason,
+            "reasons_json":              triggered[:5],
+            "data_source":               "gfw",
+        })
+        score_map[v["mmsi"]] = risk_score
+
+    _upsert_vessels_sync(rows)
+    _pipeline_update_scores(score_map)
+
+    update_payload = [
+        {
+            "mmsi":        r["mmsi"],
+            "name":        r["name"],
+            "lat":         r["lat"],
+            "lon":         r["lon"],
+            "score":       r["risk_score"],
+            "top_reason":  r["top_reason_label"],
+            "vessel_type": r["vessel_type"],
+        }
+        for r in rows
+    ]
+    _sync_redis.publish(VESSEL_UPDATES_CHANNEL, ujson.dumps(update_payload))
+
+    elapsed_ms = (_time.monotonic() - t0) * 1000
+    log.info(
+        "fetch_gfw_vessels complete vessels=%d elapsed_ms=%.1f",
+        len(rows), elapsed_ms,
+    )
+    return {"status": "ok", "vessels": len(rows), "elapsed_ms": round(elapsed_ms, 1)}
+
+
+# ---------------------------------------------------------------------------
+# Task: fetch_and_score_vessels  (legacy — kept for reference, not scheduled)
 # ---------------------------------------------------------------------------
 
 @celery_app.task(

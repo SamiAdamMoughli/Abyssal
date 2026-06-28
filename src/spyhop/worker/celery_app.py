@@ -81,8 +81,8 @@ celery_app.conf.update(
 
     # --- Beat schedule -------------------------------------------------------
     beat_schedule={
-        "fetch-and-score-vessels-every-5min": {
-            "task": "spyhop.worker.tasks.fetch_and_score_vessels",
+        "fetch-gfw-vessels-every-5min": {
+            "task": "spyhop.worker.tasks.fetch_gfw_vessels",
             "schedule": 300.0,  # 5 minutes
             "options": {"queue": "scoring"},
         },
