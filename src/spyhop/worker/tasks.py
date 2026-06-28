@@ -113,26 +113,50 @@ def fetch_gfw_vessels(self: Any) -> dict[str, Any]:
 
     log.info("fetch_gfw_vessels: fetched %d vessels from GFW", len(vessels))
 
+    from spyhop.enrichment.mpa import in_protected_area as _in_mpa
+
+    # Build IUU MMSI lookup from DB (fast set lookup per vessel)
+    _iuu_mmsis: set[str] = set()
+    _iuu_names: set[str] = set()
+    with SyncSession() as _s:
+        from sqlalchemy import select as _sel  # noqa: PLC0415
+        from spyhop.db.models import IUUBlacklist  # noqa: PLC0415
+        for row in _s.execute(_sel(IUUBlacklist.mmsi, IUUBlacklist.vessel_name)).all():
+            if row.mmsi: _iuu_mmsis.add(row.mmsi.strip())
+            if row.vessel_name: _iuu_names.add(row.vessel_name.strip().upper())
+
+    log.info("fetch_gfw_vessels: iuu_mmsis=%d iuu_names=%d", len(_iuu_mmsis), len(_iuu_names))
+
     now_utc = datetime.now(timezone.utc)
     rows: list[dict[str, Any]] = []
     score_map: dict[str, float] = {}
 
     for v in vessels:
-        # Simple rule-based scoring: count triggered rule weights
+        mmsi = v["mmsi"]
+        lat, lon = v["lat"], v["lon"]
+        name_upper = (v.get("name") or "").strip().upper()
+        et = v.get("_ev_type", "")
+
+        on_iuu = mmsi in _iuu_mmsis or (bool(name_upper) and name_upper in _iuu_names)
+        mpa_name = _in_mpa(lat, lon)
+
         state = {
-            "mmsi":            v["mmsi"],
-            "lat":             v["lat"],
-            "lon":             v["lon"],
+            "mmsi":            mmsi,
+            "lat":             lat,
+            "lon":             lon,
             "flag":            v.get("flag", "UNK"),
             "vessel_type":     v.get("vessel_type", "fishing"),
             "speed_knots":     v.get("speed_knots", 0.0),
-            "ais_gap_hours":   6.0 if v.get("_ev_type") == "gap" else 0.0,
-            "loitering_hours": 2.0 if v.get("_ev_type") == "loitering" else 0.0,
-            "in_protected_area": False,
-            "behavior_status": "loitering" if v.get("_ev_type") == "loitering" else "unknown",
+            "sog":             v.get("speed_knots", 0.0),
+            "ais_gap_hours":   6.0 if et == "gap" else 0.0,
+            "loitering_hours": 2.0 if et == "loitering" else 0.0,
+            "in_protected_area": bool(mpa_name),
+            "behavior_status": "loitering" if et == "loitering" else "unknown",
             "behavior_confidence": 0.8,
             "border_skirting": False,
-            "rendezvous_duration_hours": 1.0 if v.get("_ev_type") == "encounter" else 0.0,
+            "rendezvous_duration_hours": 1.0 if et == "encounter" else 0.0,
+            "on_iuu_blacklist": on_iuu,
+            "time_in_zone_hours": 5.0 if bool(mpa_name) and et == "loitering" else 0.0,
         }
 
         weights = {
@@ -170,7 +194,7 @@ def fetch_gfw_vessels(self: Any) -> dict[str, Any]:
             "speed_knots":               v.get("speed_knots", 0.0),
             "ais_gap_hours":             state["ais_gap_hours"],
             "loitering_hours":           state["loitering_hours"],
-            "in_protected_area":         False,
+            "in_protected_area":         bool(mpa_name),
             "recent_port_calls":         -1,
             "days_since_port":           -1.0,
             "distance_to_nearest_port_nm": -1.0,
