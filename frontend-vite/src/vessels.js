@@ -53,7 +53,7 @@ export function matchesQuickFilters(v) {
     if (f === 'fishing_only') return String(v.vessel_type || '').toLowerCase().includes('fish');
     if (f === 'mpa_only')    return v.in_protected_area;
     if (f === 'dark_only')   return v.dark_vessel || v.gap_events_90d > 0;
-    if (f === 'hi_risk')     return (v.risk_score ?? 0) >= 0.4;
+    if (f === 'hi_risk')     return (v.risk_score ?? 0) >= 40;
     return true;
   });
 }

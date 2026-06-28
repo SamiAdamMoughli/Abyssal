@@ -385,7 +385,7 @@ RULES: list[Rule] = [
         id="high_risk_score",
         label="High Composite Risk Score",
         severity=Severity.ALERT,
-        predicate=lambda v: float(v.get("risk_score", 0)) >= 0.75,
+        predicate=lambda v: float(v.get("risk_score", 0)) >= 75,
         message=lambda v: (
             f"Vessel {v.get('mmsi')} composite risk score"
             f" {v.get('risk_score', 0):.2f} exceeds alert threshold"

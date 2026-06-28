@@ -29,7 +29,7 @@ export function renderCards() {
     card.innerHTML = `
       <div class="card-row1">
         <span class="card-name">${v.name}</span>
-        <span class="badge badge-${cls}">${v.risk_score.toFixed(1)}</span>
+        <span class="badge badge-${cls}">${Math.round(v.risk_score ?? 0)}</span>
       </div>
       <div class="card-row2">
         <span>${flagEmoji(v.flag)} ${v.flag}</span><span class="sep">/</span>
