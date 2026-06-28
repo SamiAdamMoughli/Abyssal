@@ -2,6 +2,15 @@
 # Railway's managed Postgres plugin does not include PostGIS, so we deploy
 # the kartoza/postgis image as a custom service and bake the extension bootstrap
 # SQL in at image build time.
+#
+# The pg_hba_fix.sh script adds IPv6 trust entries because Railway's private
+# network uses IPv6 addresses that kartoza/postgis doesn't allow by default.
 FROM kartoza/postgis:16-3.4
 
 COPY src/spyhop/db/migrations/init.sql /docker-entrypoint-initdb.d/01_init.sql
+
+# Append IPv6 host entries to pg_hba.conf after Postgres initialises.
+# The file is run by the entrypoint as part of /docker-entrypoint-initdb.d/.
+RUN printf '#!/bin/bash\necho "host all all ::/0 md5" >> /etc/postgresql/16/main/pg_hba.conf\necho "host all all 0.0.0.0/0 md5" >> /etc/postgresql/16/main/pg_hba.conf\n' \
+    > /docker-entrypoint-initdb.d/02_hba_fix.sh \
+ && chmod +x /docker-entrypoint-initdb.d/02_hba_fix.sh
