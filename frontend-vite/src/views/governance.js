@@ -18,7 +18,8 @@
 import { API_URL } from '../config.js';
 import { state } from '../state.js';
 
-const ANALYTICS_URL = window.__ENV?.ANALYTICS_URL ?? 'http://localhost:8001';
+// Analytics engine shares the main API until a separate service is deployed
+const ANALYTICS_URL = window.__ENV?.ANALYTICS_URL ?? API_URL;
 
 // 11 brain rules with tier and default-enabled state
 const RULES = [

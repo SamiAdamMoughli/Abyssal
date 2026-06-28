@@ -30,18 +30,20 @@ export function matchesCategory(v) {
 
 export function sortVessels(a, b) {
   const s = state.currentSort;
-  if (s === 'score_desc') return b.score - a.score;
-  if (s === 'score_asc')  return a.score - b.score;
+  const scoreA = a.risk_score ?? a.score ?? 0;
+  const scoreB = b.risk_score ?? b.score ?? 0;
+  if (s === 'score_desc') return scoreB - scoreA;
+  if (s === 'score_asc')  return scoreA - scoreB;
   if (s === 'name_asc')   return String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' });
   if (s === 'name_desc')  return String(b.name || '').localeCompare(String(a.name || ''), undefined, { sensitivity: 'base' });
   if (s === 'flag_asc') {
     const cmp = String(a.flag || '').localeCompare(String(b.flag || ''), undefined, { sensitivity: 'base' });
-    return cmp || b.score - a.score;
+    return cmp || scoreB - scoreA;
   }
   if (s === 'mpa_first') {
-    return (a.in_protected_area ? 0 : 1) - (b.in_protected_area ? 0 : 1) || b.score - a.score;
+    return (a.in_protected_area ? 0 : 1) - (b.in_protected_area ? 0 : 1) || scoreB - scoreA;
   }
-  return b.score - a.score;
+  return scoreB - scoreA;
 }
 
 export function matchesQuickFilters(v) {
@@ -51,7 +53,7 @@ export function matchesQuickFilters(v) {
     if (f === 'fishing_only') return String(v.vessel_type || '').toLowerCase().includes('fish');
     if (f === 'mpa_only')    return v.in_protected_area;
     if (f === 'dark_only')   return v.dark_vessel || v.gap_events_90d > 0;
-    if (f === 'hi_risk')     return (v.risk_score ?? 0) >= 70;
+    if (f === 'hi_risk')     return (v.risk_score ?? 0) >= 0.4;
     return true;
   });
 }
