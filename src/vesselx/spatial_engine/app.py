@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -24,8 +25,10 @@ log = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     log.info("vesselx.spatial_engine.starting", version=__version__)
-    await wait_for_db()
-    await wait_for_redis()
+    # Background — don't block uvicorn startup so Railway's health probe
+    # gets a 200 immediately while DB/Redis finish connecting.
+    asyncio.create_task(wait_for_db())
+    asyncio.create_task(wait_for_redis())
     log.info("vesselx.spatial_engine.ready")
     yield
     await close_pool()
