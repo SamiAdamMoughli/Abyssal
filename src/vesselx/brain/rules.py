@@ -22,6 +22,18 @@ from enum import Enum
 from typing import Any, Callable
 
 
+def _species(v: dict[str, Any], key: str = "corridor_species") -> str:
+    """Comma-joined species string, safe against None and plain strings."""
+    raw = v.get(key) or []
+    if isinstance(raw, str):
+        raw = [raw]
+    return ", ".join(raw) or "unknown species"
+
+
+def _spawning(v: dict[str, Any]) -> str:
+    return _species(v, "spawning_species")
+
+
 class Severity(str, Enum):
     INFO     = "info"
     WARNING  = "warning"
@@ -39,6 +51,51 @@ class Rule:
 
 
 # ---------------------------------------------------------------------------
+# Flag-state risk tiers
+# Based on RFMO IUU enforcement records, EU IUU carding history, and
+# open-registry evasion patterns (ITF / Equasis / FAO data).
+# ---------------------------------------------------------------------------
+
+# CRITICAL — states with active RFMO IUU listings or EU red-card history
+_FLAG_CRITICAL: frozenset[str] = frozenset({
+    "PRK",  # North Korea — UNSC sanctions, widespread IUU
+    "GIN",  # Guinea — repeat EU red card
+    "SLE",  # Sierra Leone — recurring IUU flag-hopping hub
+    "TOG",  # Togo — EU red card, low oversight
+    "CMR",  # Cameroon — EU red card
+    "BLZ",  # Belize — repeated RFMO IUU listings
+    "KIR",  # Kiribati — WCPFC non-compliance
+    "TUV",  # Tuvalu — open registry, low enforcement
+    "COM",  # Comoros — flag of convenience, RFMO sanctions
+})
+
+# WARNING — open registries with elevated evasion risk
+_FLAG_WARNING: frozenset[str] = frozenset({
+    "PAN",  # Panama — largest open registry, used for evasion
+    "LBR",  # Liberia — major flag of convenience
+    "MHL",  # Marshall Islands — open registry
+    "BHS",  # Bahamas — flag of convenience
+    "ATG",  # Antigua & Barbuda — open registry
+    "VCT",  # St Vincent & Grenadines — open registry
+    "PLW",  # Palau — minimal enforcement
+    "MDV",  # Maldives — limited RFMO oversight
+    "HND",  # Honduras — open registry, low enforcement
+    "BOL",  # Bolivia (landlocked but flags vessels) — minimal oversight
+})
+
+# INFO — states with known IUU fishing fleets but flag enforcement varies
+_FLAG_INFO: frozenset[str] = frozenset({
+    "CHN",  # China — largest distant-water fleet, frequent IUU incidents
+    "VNM",  # Vietnam — serial EU yellow card for IUU
+    "TWN",  # Taiwan — multiple RFMO violations
+    "KOR",  # South Korea — CCAMLR and WCPFC violations
+    "IDN",  # Indonesia — domestic IUU significant
+    "PHL",  # Philippines — WCPFC compliance issues
+    "SEN",  # Senegal — license violations in own waters
+})
+
+
+# ---------------------------------------------------------------------------
 # Rule catalogue
 # ---------------------------------------------------------------------------
 
@@ -52,8 +109,10 @@ RULES: list[Rule] = [
         severity=Severity.CRITICAL,
         predicate=lambda v: bool(v.get("in_protected_area")),
         message=lambda v: (
-            f"Vessel {v.get('mmsi')} detected inside a Marine Protected Area "
-            f"(h3={v.get('h3_index')}, lat={v.get('lat'):.4f}, lon={v.get('lon'):.4f})."
+            f"Vessel {v.get('mmsi')} detected inside a Marine Protected Area"
+            f" (h3={v.get('h3_index')},"
+            f" lat={v.get('lat') or 0:.4f},"
+            f" lon={v.get('lon') or 0:.4f})."
         ),
     ),
 
@@ -66,8 +125,9 @@ RULES: list[Rule] = [
             and v.get("behavior_status") in ("trawling", "loitering")
         ),
         message=lambda v: (
-            f"Vessel {v.get('mmsi')} exhibiting {v.get('behavior_status')} pattern "
-            f"inside MPA (confidence={v.get('behavior_confidence', 0):.0%})."
+            f"Vessel {v.get('mmsi')} exhibiting"
+            f" {v.get('behavior_status')} pattern inside MPA"
+            f" (confidence={v.get('behavior_confidence', 0):.0%})."
         ),
     ),
 
@@ -77,8 +137,9 @@ RULES: list[Rule] = [
         severity=Severity.WARNING,
         predicate=lambda v: bool(v.get("border_skirting")),
         message=lambda v: (
-            f"Vessel {v.get('mmsi')} sustained near-boundary movement outside MPA "
-            f"(nearest={v.get('nearest_mpa_nm', -1):.1f} nm). Possible avoidance behaviour."
+            f"Vessel {v.get('mmsi')} sustained near-boundary movement"
+            f" outside MPA (nearest={v.get('nearest_mpa_nm', -1):.1f} nm)."
+            f" Possible avoidance behaviour."
         ),
     ),
 
@@ -88,8 +149,8 @@ RULES: list[Rule] = [
         severity=Severity.ALERT,
         predicate=lambda v: float(v.get("time_in_zone_hours", 0)) > 4.0,
         message=lambda v: (
-            f"Vessel {v.get('mmsi')} has been inside a protected zone for "
-            f"{v.get('time_in_zone_hours', 0):.1f} hours continuously."
+            f"Vessel {v.get('mmsi')} has been inside a protected zone for"
+            f" {v.get('time_in_zone_hours', 0):.1f} hours continuously."
         ),
     ),
 
@@ -101,8 +162,9 @@ RULES: list[Rule] = [
         severity=Severity.ALERT,
         predicate=lambda v: float(v.get("ais_gap_hours", 0)) > 2.0,
         message=lambda v: (
-            f"Vessel {v.get('mmsi')} AIS signal lost for "
-            f"{v.get('ais_gap_hours', 0):.1f} hours (gap_type={v.get('gap_type', 'unknown')})."
+            f"Vessel {v.get('mmsi')} AIS signal lost for"
+            f" {v.get('ais_gap_hours', 0):.1f} hours"
+            f" (gap_type={v.get('gap_type', 'unknown')})."
         ),
     ),
 
@@ -112,8 +174,9 @@ RULES: list[Rule] = [
         severity=Severity.CRITICAL,
         predicate=lambda v: bool(v.get("spoofing_flag")),
         message=lambda v: (
-            f"Vessel {v.get('mmsi')} probable AIS position spoofing — "
-            f"implied speed {v.get('spoofing_max_speed_kn', 0):.1f} kn exceeds physical limits."
+            f"Vessel {v.get('mmsi')} probable AIS position spoofing —"
+            f" implied speed {v.get('spoofing_max_speed_kn', 0):.1f} kn"
+            f" exceeds physical limits."
         ),
     ),
 
@@ -123,7 +186,8 @@ RULES: list[Rule] = [
         severity=Severity.CRITICAL,
         predicate=lambda v: bool(v.get("on_iuu_blacklist")),
         message=lambda v: (
-            f"Vessel {v.get('mmsi')} matches an entry on the IUU vessel blacklist."
+            f"Vessel {v.get('mmsi')} matches an entry on the IUU"
+            f" vessel blacklist."
         ),
     ),
 
@@ -139,8 +203,9 @@ RULES: list[Rule] = [
             and not v.get("in_protected_area")
         ),
         message=lambda v: (
-            f"Vessel {v.get('mmsi')} loitering in open ocean — possible gear deployment "
-            f"or rendezvous (confidence={v.get('behavior_confidence', 0):.0%})."
+            f"Vessel {v.get('mmsi')} loitering in open ocean —"
+            f" possible gear deployment or rendezvous"
+            f" (confidence={v.get('behavior_confidence', 0):.0%})."
         ),
     ),
 
@@ -148,11 +213,14 @@ RULES: list[Rule] = [
         id="rendezvous_transship_risk",
         label="Vessel Rendezvous — Transhipment Risk",
         severity=Severity.ALERT,
-        predicate=lambda v: v.get("rendezvous_meeting_class") == "transship_risk",
+        predicate=lambda v: (
+            v.get("rendezvous_meeting_class") == "transship_risk"
+        ),
         message=lambda v: (
-            f"Vessel {v.get('mmsi')} in close proximity to a "
-            f"{v.get('rendezvous_partner_type', 'unknown')} vessel for "
-            f"{v.get('rendezvous_duration_hours', 0):.1f} h — possible transhipment."
+            f"Vessel {v.get('mmsi')} in close proximity to a"
+            f" {v.get('rendezvous_partner_type', 'unknown')} vessel for"
+            f" {v.get('rendezvous_duration_hours', 0):.1f} h —"
+            f" possible transhipment."
         ),
     ),
 
@@ -162,8 +230,9 @@ RULES: list[Rule] = [
         severity=Severity.WARNING,
         predicate=lambda v: bool(v.get("is_dark_candidate")),
         message=lambda v: (
-            f"SAR/radar contact at ({v.get('lat', 0):.4f}, {v.get('lon', 0):.4f}) "
-            f"with no matching AIS transponder signal."
+            f"SAR/radar contact at"
+            f" ({v.get('lat', 0):.4f}, {v.get('lon', 0):.4f})"
+            f" with no matching AIS transponder signal."
         ),
     ),
 
@@ -182,11 +251,11 @@ RULES: list[Rule] = [
             and float(v.get("sog", 0.0)) >= 10.0
         ),
         message=lambda v: (
-            f"Vessel {v.get('mmsi')} travelling at {v.get('sog', 0):.1f} kn "
-            f"through an active cetacean corridor "
-            f"({', '.join(v.get('corridor_species', [])) or 'unknown species'}) — "
-            f"whale strike risk {v.get('whale_strike_risk', 0):.0%}. "
-            f"IWC/NOAA threshold is 10 kn."
+            f"Vessel {v.get('mmsi')} travelling at"
+            f" {v.get('sog', 0):.1f} kn through an active cetacean"
+            f" corridor ({_species(v)}) —"
+            f" whale strike risk {v.get('whale_strike_risk', 0):.0%}."
+            f" IWC/NOAA threshold is 10 kn."
         ),
     ),
 
@@ -200,10 +269,10 @@ RULES: list[Rule] = [
             and float(v.get("corridor_season_peak", 0.0)) >= 0.3
         ),
         message=lambda v: (
-            f"Vessel {v.get('mmsi')} transiting active cetacean corridor at "
-            f"{v.get('sog', 0):.1f} kn — migration intensity "
-            f"{v.get('corridor_season_peak', 0):.0%} "
-            f"({', '.join(v.get('corridor_species', [])) or 'unknown species'})."
+            f"Vessel {v.get('mmsi')} transiting active cetacean corridor"
+            f" at {v.get('sog', 0):.1f} kn —"
+            f" migration intensity {v.get('corridor_season_peak', 0):.0%}"
+            f" ({_species(v)})."
         ),
     ),
 
@@ -213,13 +282,16 @@ RULES: list[Rule] = [
         severity=Severity.ALERT,
         predicate=lambda v: (
             bool(v.get("in_cetacean_corridor"))
-            and v.get("vessel_type", "").lower() in ("cargo", "tanker", "container")
+            and v.get("vessel_type", "").lower() in (
+                "cargo", "tanker", "container"
+            )
             and float(v.get("corridor_season_peak", 0.0)) >= 0.6
         ),
         message=lambda v: (
-            f"Vessel {v.get('mmsi')} ({v.get('vessel_type')}) in peak-season "
-            f"cetacean corridor (intensity {v.get('corridor_season_peak', 0):.0%}) — "
-            f"vessels >5 000 DWT have no effective collision avoidance capability."
+            f"Vessel {v.get('mmsi')} ({v.get('vessel_type')}) in"
+            f" peak-season cetacean corridor"
+            f" (intensity {v.get('corridor_season_peak', 0):.0%}) —"
+            f" vessels >5 000 DWT have no effective collision avoidance."
         ),
     ),
 
@@ -233,10 +305,11 @@ RULES: list[Rule] = [
             and float(v.get("behavior_confidence", 0.0)) >= 0.6
         ),
         message=lambda v: (
-            f"Vessel {v.get('mmsi')} exhibiting {v.get('behavior_status')} pattern "
-            f"inside an active spawning ground "
-            f"({', '.join(v.get('spawning_species', [])) or 'unknown species'}) — "
-            f"bottom contact during broadcast spawning destroys pelagic egg clouds."
+            f"Vessel {v.get('mmsi')} exhibiting"
+            f" {v.get('behavior_status')} pattern inside an active"
+            f" spawning ground ({_spawning(v)}) —"
+            f" bottom contact during broadcast spawning destroys"
+            f" pelagic egg clouds."
         ),
     ),
 
@@ -249,9 +322,10 @@ RULES: list[Rule] = [
             and float(v.get("sog", 99.0)) < 1.5
         ),
         message=lambda v: (
-            f"Vessel {v.get('mmsi')} stationary or near-stationary "
-            f"(SOG {v.get('sog', 0):.1f} kn) inside an active spawning ground — "
-            f"anchor chain and prop wash damage fertilised surface egg concentrations."
+            f"Vessel {v.get('mmsi')} stationary or near-stationary"
+            f" (SOG {v.get('sog', 0):.1f} kn) inside an active spawning"
+            f" ground — anchor chain and prop wash damage fertilised"
+            f" surface egg concentrations."
         ),
     ),
 
@@ -261,11 +335,47 @@ RULES: list[Rule] = [
         severity=Severity.ALERT,
         predicate=lambda v: float(v.get("whale_strike_risk", 0.0)) >= 0.65,
         message=lambda v: (
-            f"Vessel {v.get('mmsi')} composite whale-strike risk "
-            f"{v.get('whale_strike_risk', 0):.0%} — "
-            f"SOG {v.get('sog', 0):.1f} kn × season intensity "
-            f"{v.get('corridor_season_peak', 0):.0%} × "
-            f"endangerment weight {v.get('endangerment_weight', 0):.2f}."
+            f"Vessel {v.get('mmsi')} composite whale-strike risk"
+            f" {v.get('whale_strike_risk', 0):.0%} —"
+            f" SOG {v.get('sog', 0):.1f} kn"
+            f" × season intensity {v.get('corridor_season_peak', 0):.0%}"
+            f" × endangerment weight"
+            f" {v.get('endangerment_weight', 0):.2f}."
+        ),
+    ),
+
+    # --- Flag-state risk rules ----------------------------------------------
+
+    Rule(
+        id="flag_state_critical",
+        label="Critical-Risk Flag State",
+        severity=Severity.CRITICAL,
+        predicate=lambda v: str(v.get("flag", "")).upper() in _FLAG_CRITICAL,
+        message=lambda v: (
+            f"Vessel {v.get('mmsi')} flagged to {v.get('flag')} — "
+            f"active RFMO IUU listings or EU red-card enforcement history."
+        ),
+    ),
+
+    Rule(
+        id="flag_state_warning",
+        label="High-Risk Open Registry Flag",
+        severity=Severity.WARNING,
+        predicate=lambda v: str(v.get("flag", "")).upper() in _FLAG_WARNING,
+        message=lambda v: (
+            f"Vessel {v.get('mmsi')} flagged to {v.get('flag')} — "
+            f"open registry with elevated accountability risk."
+        ),
+    ),
+
+    Rule(
+        id="flag_state_info",
+        label="Elevated-Risk Flag State Fleet",
+        severity=Severity.INFO,
+        predicate=lambda v: str(v.get("flag", "")).upper() in _FLAG_INFO,
+        message=lambda v: (
+            f"Vessel {v.get('mmsi')} flagged to {v.get('flag')} — "
+            f"flag state has documented IUU fishing incidents."
         ),
     ),
 
@@ -277,9 +387,9 @@ RULES: list[Rule] = [
         severity=Severity.ALERT,
         predicate=lambda v: float(v.get("risk_score", 0)) >= 0.75,
         message=lambda v: (
-            f"Vessel {v.get('mmsi')} composite risk score "
-            f"{v.get('risk_score', 0):.2f} exceeds alert threshold "
-            f"({v.get('top_reason_label', 'see details')})."
+            f"Vessel {v.get('mmsi')} composite risk score"
+            f" {v.get('risk_score', 0):.2f} exceeds alert threshold"
+            f" ({v.get('top_reason_label', 'see details')})."
         ),
     ),
 ]

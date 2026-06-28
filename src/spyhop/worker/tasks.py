@@ -139,12 +139,13 @@ def fetch_gfw_vessels(self: Any) -> dict[str, Any]:
 
         on_iuu = mmsi in _iuu_mmsis or (bool(name_upper) and name_upper in _iuu_names)
         mpa_name = _in_mpa(lat, lon)
+        flag = v.get("flag", "UNK")
 
         state = {
             "mmsi":            mmsi,
             "lat":             lat,
             "lon":             lon,
-            "flag":            v.get("flag", "UNK"),
+            "flag":            flag,
             "vessel_type":     v.get("vessel_type", "fishing"),
             "speed_knots":     v.get("speed_knots", 0.0),
             "sog":             v.get("speed_knots", 0.0),

@@ -62,37 +62,43 @@ def _headers() -> dict[str, str]:
 
 
 def fetch_recent_vessels(
-    hours: int = 24,
-    limit: int = 1000,
+    hours: int = 168,
+    limit: int = 10000,
     timeout: float = 60.0,
+    page_size: int = 2000,
 ) -> list[dict[str, Any]]:
     """Return up to ``limit`` unique vessels active in the last ``hours`` h.
 
-    Makes a single POST to /v3/events with all relevant dataset types, then
-    deduplicates by MMSI, keeping the most-recent-event position.
+    Paginates /v3/events in pages of ``page_size`` until ``limit`` events
+    are collected or the API is exhausted, then deduplicates by MMSI.
     """
     now = datetime.now(timezone.utc)
     start = (now - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
     end = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    payload = {"datasets": EVENT_DATASETS, "startDate": start, "endDate": end}
 
-    payload = {
-        "datasets": EVENT_DATASETS,
-        "startDate": start,
-        "endDate":   end,
-    }
-
+    all_events: list[dict] = []
+    offset = 0
     with httpx.Client(timeout=timeout) as client:
-        resp = client.post(
-            f"{GFW_BASE}/events",
-            headers=_headers(),
-            json=payload,
-            # GFW requires limit AND offset together as query params
-        params={"limit": limit, "offset": 0},
-        )
-        resp.raise_for_status()
-        data = resp.json()
+        while len(all_events) < limit:
+            fetch = min(page_size, limit - len(all_events))
+            resp = client.post(
+                f"{GFW_BASE}/events",
+                headers=_headers(),
+                json=payload,
+                params={"limit": fetch, "offset": offset},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            entries = data.get("entries", [])
+            if not entries:
+                break
+            all_events.extend(entries)
+            offset += len(entries)
+            if offset >= data.get("total", 0):
+                break
 
-    return _dedup_events(data.get("entries", []))
+    return _dedup_events(all_events)
 
 
 def _dedup_events(events: list[dict]) -> list[dict[str, Any]]:
