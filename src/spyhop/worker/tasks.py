@@ -102,7 +102,7 @@ def fetch_gfw_vessels(self: Any) -> dict[str, Any]:
 
     try:
         from spyhop.sources.gfw import fetch_recent_vessels
-        vessels = fetch_recent_vessels(hours=24, limit=2000)
+        vessels = fetch_recent_vessels(hours=168, limit=2000)  # 7 days — GFW has multi-day latency
     except Exception as exc:
         log.exception("fetch_gfw_vessels: GFW API call failed: %s", exc)
         raise self.retry(exc=exc)
@@ -530,6 +530,7 @@ def _upsert_vessels_sync(rows: list[dict[str, Any]]) -> None:
     """Bulk-upsert vessel rows using sync SQLAlchemy + psycopg2."""
     with SyncSession() as session:
         for row in rows:
+            row = dict(row)  # copy so we don't mutate the caller's dict
             lat = row.pop("lat")
             lon = row.pop("lon")
             stmt = pg_insert(VesselPosition).values(
@@ -567,45 +568,61 @@ def _pipeline_update_scores(score_map: dict[str, float]) -> None:
 
 
 def _replace_iuu_blacklist_sync(entries: list[dict[str, Any]]) -> None:
-    """Truncate + re-insert IUU blacklist records atomically."""
-    with SyncSession() as session:
-        session.execute(delete(IUUBlacklist))
-        now = datetime.now(timezone.utc)
-        for e in entries:
-            session.add(IUUBlacklist(
-                listing_source=e.get("source", "CCAMLR"),
-                mmsi=e.get("mmsi"),
-                imo=e.get("imo"),
-                vessel_name=e.get("name"),
-                aliases_json=e.get("aliases", []),
-                flag=e.get("flag"),
-                listing_year=e.get("year"),
-                raw_json=e,
-                synced_at=now,
-            ))
-        session.commit()
+    """Truncate + re-insert IUU blacklist records inside a Redis lock.
+
+    The lock prevents two concurrent beat invocations from interleaving their
+    DELETE + INSERT sequences, which would produce duplicate rows. The DB
+    transaction ensures DELETE + INSERT are committed atomically — if commit
+    fails, both operations are rolled back and the existing data is preserved.
+    """
+    with _sync_redis.lock("lock:sync_iuu_blacklist", timeout=120, blocking_timeout=10):
+        with SyncSession() as session:
+            try:
+                session.execute(delete(IUUBlacklist))
+                now = datetime.now(timezone.utc)
+                for e in entries:
+                    session.add(IUUBlacklist(
+                        listing_source=e.get("source", "CCAMLR"),
+                        mmsi=e.get("mmsi"),
+                        imo=e.get("imo"),
+                        vessel_name=e.get("name"),
+                        aliases_json=e.get("aliases", []),
+                        flag=e.get("flag"),
+                        listing_year=e.get("year"),
+                        raw_json=e,
+                        synced_at=now,
+                    ))
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
 
 def _replace_sanctioned_vessels_sync(
     entries: list[dict[str, Any]],
 ) -> None:
-    """Truncate + re-insert sanctioned vessel records atomically."""
-    with SyncSession() as session:
-        session.execute(delete(SanctionedVessel))
-        now = datetime.now(timezone.utc)
-        for e in entries:
-            session.add(SanctionedVessel(
-                opensanctions_id=e["id"],
-                vessel_name=e.get("name"),
-                aliases_json=e.get("aliases", []),
-                mmsi=e.get("mmsi"),
-                imo=e.get("imo"),
-                flag=e.get("flag"),
-                sanctions_datasets=e.get("sanctions", []),
-                source_url=e.get("source_url"),
-                synced_at=now,
-            ))
-        session.commit()
+    """Truncate + re-insert sanctioned vessel records inside a Redis lock."""
+    with _sync_redis.lock("lock:sync_sanctioned_vessels", timeout=120, blocking_timeout=10):
+        with SyncSession() as session:
+            try:
+                session.execute(delete(SanctionedVessel))
+                now = datetime.now(timezone.utc)
+                for e in entries:
+                    session.add(SanctionedVessel(
+                        opensanctions_id=e["id"],
+                        vessel_name=e.get("name"),
+                        aliases_json=e.get("aliases", []),
+                        mmsi=e.get("mmsi"),
+                        imo=e.get("imo"),
+                        flag=e.get("flag"),
+                        sanctions_datasets=e.get("sanctions", []),
+                        source_url=e.get("source_url"),
+                        synced_at=now,
+                    ))
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
 
 def _insert_tracks_sync(rows: list[dict[str, Any]]) -> None:
@@ -967,20 +984,20 @@ def _detect_proximity_sync(
 
             lo, hi = sorted([a.mmsi, b.mmsi])
             key = f"iv:{lo}:{hi}"
-            raw = _sync_redis.get(key)
-            if raw:
-                state = ujson.loads(raw)
-                first_ts = datetime.fromisoformat(state["first_ts"])
-                duration_h = (now - first_ts).total_seconds() / 3600.0
-            else:
-                state = {
-                    "first_ts": now.isoformat(),
-                    "type_a": a.vessel_type,
-                    "type_b": b.vessel_type,
-                }
-                duration_h = 0.0
-
-            _sync_redis.setex(key, REDIS_TTL, ujson.dumps(state))
+            # SET NX atomically records first_ts only if the key is new.
+            # Without NX, two workers processing the same pair concurrently
+            # would both write their own first_ts, making the later write
+            # win and shortening the apparent rendezvous duration.
+            initial = ujson.dumps({
+                "first_ts": now.isoformat(),
+                "type_a": a.vessel_type,
+                "type_b": b.vessel_type,
+            })
+            _sync_redis.set(key, initial, ex=REDIS_TTL, nx=True)
+            raw = _sync_redis.getex(key, ex=REDIS_TTL)  # resets TTL on read
+            state = ujson.loads(raw) if raw else ujson.loads(initial)
+            first_ts = datetime.fromisoformat(state["first_ts"])
+            duration_h = (now - first_ts).total_seconds() / 3600.0
 
             mc = classify_pair(
                 state.get("type_a", a.vessel_type),
@@ -1108,11 +1125,14 @@ def _compute_environmental_sync(
 ) -> "dict[str, Any]":
     """Nearest-neighbour PostGIS lookup of environmental raster for each vessel.
 
-    Uses ST_DWithin on the GiST index to find the closest raster cell within
-    ``search_radius_deg`` degrees (~220 km at equator). For each vessel:
-      - SST, wave height, wind speed from the nearest cell
-      - SST thermal front detected by checking if any of the 8 neighbours
-        differ from the vessel cell by >= 2°C
+    Replaces the former N+1 pattern (2 queries per vessel) with a single
+    LATERAL UNNEST query that resolves all vessels in one round-trip:
+
+      - UNNEST passes all (mmsi, lat, lon) tuples as parallel arrays.
+      - CROSS JOIN LATERAL fetches the nearest raster cell per vessel using
+        the GiST index (ST_DWithin filter + <-> ordering).
+      - A correlated subquery collects neighbour SST values for front detection
+        in the same pass.
 
     Returns dict mmsi → EnvironmentalContext dataclass.
     """
@@ -1123,66 +1143,71 @@ def _compute_environmental_sync(
     if not vessels:
         return {}
 
-    result: dict[str, Any] = {}
+    radius_m = search_radius_deg * 111_000
+    neighbour_m = 3 * 111_000  # ~3° radius for SST gradient neighbours
+
+    mmsis = [v.mmsi for v in vessels]
+    lats = [float(v.lat) for v in vessels]
+    lons = [float(v.lon) for v in vessels]
+
     with SyncSession() as session:
-        for v in vessels:
-            # Nearest raster cell (ORDER BY distance ASC LIMIT 1)
-            row = session.execute(
-                text(
-                    """
+        rows = session.execute(
+            text(
+                """
+                SELECT
+                    v.mmsi,
+                    r.sst_celsius,
+                    r.wave_height_m,
+                    r.wind_speed_kn,
+                    (
+                        SELECT array_agg(n.sst_celsius)
+                        FROM environment_raster n
+                        WHERE ST_DWithin(
+                            n.position::geography,
+                            ST_SetSRID(ST_MakePoint(v.lon::float8, v.lat::float8), 4326)::geography,
+                            :neighbour_m
+                        )
+                        AND n.sst_celsius > -999
+                        LIMIT 16
+                    ) AS neighbour_sst
+                FROM
+                    unnest(:mmsis, :lats, :lons) AS v(mmsi, lat, lon)
+                CROSS JOIN LATERAL (
                     SELECT sst_celsius, wave_height_m, wind_speed_kn
                     FROM environment_raster
                     WHERE ST_DWithin(
                         position::geography,
-                        ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography,
+                        ST_SetSRID(ST_MakePoint(v.lon::float8, v.lat::float8), 4326)::geography,
                         :radius_m
                     )
-                    ORDER BY position <-> ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)
+                    ORDER BY
+                        position <-> ST_SetSRID(ST_MakePoint(v.lon::float8, v.lat::float8), 4326)
                     LIMIT 1
-                    """
-                ),
-                {
-                    "lat": v.lat, "lon": v.lon,
-                    "radius_m": search_radius_deg * 111_000,
-                },
-            ).fetchone()
+                ) r
+                """
+            ),
+            {
+                "mmsis": mmsis,
+                "lats": lats,
+                "lons": lons,
+                "radius_m": radius_m,
+                "neighbour_m": neighbour_m,
+            },
+        ).fetchall()
 
-            if row is None:
-                continue
-
-            sst = float(row.sst_celsius)
-            wave = float(row.wave_height_m)
-            wind = float(row.wind_speed_kn)
-
-            # Nearby cells for gradient detection (8-neighbour, 2° apart)
-            neighbour_rows = session.execute(
-                text(
-                    """
-                    SELECT sst_celsius FROM environment_raster
-                    WHERE ST_DWithin(
-                        position::geography,
-                        ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography,
-                        :radius_m
-                    )
-                    AND sst_celsius > -999
-                    LIMIT 16
-                    """
-                ),
-                {
-                    "lat": v.lat, "lon": v.lon,
-                    "radius_m": 3 * 111_000,  # ~3° radius for neighbours
-                },
-            ).fetchall()
-
-            nearby_sst = [float(r.sst_celsius) for r in neighbour_rows]
-            at_front = detect_sst_front(sst, nearby_sst)
-
-            result[v.mmsi] = EnvironmentalContext(
-                sst_celsius=sst,
-                wave_height_m=wave,
-                wind_speed_kn=wind,
-                sst_at_thermal_front=at_front,
-            )
+    result: dict[str, Any] = {}
+    for row in rows:
+        sst = float(row.sst_celsius)
+        wave = float(row.wave_height_m)
+        wind = float(row.wind_speed_kn)
+        nearby_sst = [float(x) for x in (row.neighbour_sst or [])]
+        at_front = detect_sst_front(sst, nearby_sst)
+        result[row.mmsi] = EnvironmentalContext(
+            sst_celsius=sst,
+            wave_height_m=wave,
+            wind_speed_kn=wind,
+            sst_at_thermal_front=at_front,
+        )
 
     return result
 
