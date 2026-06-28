@@ -142,8 +142,8 @@ async def risk_summary() -> dict[str, Any]:
             """
             SELECT
                 COUNT(*) AS total,
-                COUNT(*) FILTER (WHERE risk_score >= 70) AS high_risk,
-                COUNT(*) FILTER (WHERE risk_score >= 40 AND risk_score < 70) AS med_risk,
+                COUNT(*) FILTER (WHERE risk_score >= 0.70) AS high_risk,
+                COUNT(*) FILTER (WHERE risk_score >= 0.40 AND risk_score < 0.70) AS med_risk,
                 COUNT(*) FILTER (WHERE in_protected_area = TRUE) AS in_mpa,
                 COUNT(*) FILTER (WHERE ais_gap_hours >= 6) AS dark_vessels,
                 ROUND(AVG(risk_score)::numeric, 1) AS avg_score

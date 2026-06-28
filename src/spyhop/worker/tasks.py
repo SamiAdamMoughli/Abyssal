@@ -1493,8 +1493,8 @@ def materialize_h3_corridors() -> dict[str, Any]:
 
             scores = list(mmsi_peak.values())
             n = len(scores)
-            high_risk = sum(1 for s in scores if s >= 70.0)
-            med_risk = sum(1 for s in scores if 40.0 <= s < 70.0)
+            high_risk = sum(1 for s in scores if s >= 0.70)
+            med_risk = sum(1 for s in scores if 0.40 <= s < 0.70)
             dark_count = sum(1 for v in mmsi_dark.values() if v)
             rvz_count = sum(1 for v in mmsi_rvz.values() if v)
             mpa_count = sum(1 for v in mmsi_mpa.values() if v)
@@ -1510,7 +1510,7 @@ def materialize_h3_corridors() -> dict[str, Any]:
                     """
                     SELECT COUNT(DISTINCT date_trunc('week', snapped_at))
                     FROM vessel_position_snapshots
-                    WHERE h3_index_5 = :cell AND risk_score >= 70
+                    WHERE h3_index_5 = :cell AND risk_score >= 0.70
                     """
                 ),
                 {"cell": cell},
