@@ -60,6 +60,27 @@ MAJOR_MPAS: list[MPABox] = [
     MPABox("Greenland MPA",                        57.0,  83.5,  -74.0,  -12.0),
     MPABox("Svalbard MPA",                         74.0,  81.0,   10.0,   35.0),
 
+    # Baltic Sea
+    MPABox("Wadden Sea World Heritage",            53.2,  55.6,    7.5,   10.0),
+    MPABox("Bornholm Basin MPA",                   54.8,  56.2,   14.5,   16.5),
+    MPABox("Curonian Spit NP",                     55.0,  56.5,   21.0,   21.2),
+    MPABox("Gulf of Finland MPA",                  59.3,  60.5,   24.5,   28.5),
+    MPABox("Archipelago Sea NP",                   59.7,  60.4,   21.3,   22.0),
+    MPABox("Kvarken Archipelago UNESCO",           63.0,  64.0,   21.0,   22.0),
+
+    # English Channel / North Sea
+    MPABox("Hauts-Fonds de la Manche MPA",         49.6,  51.0,   -3.0,    2.0),
+    MPABox("Offshore Brighton MPA",                50.4,  51.0,   -0.6,    0.4),
+    MPABox("Bassurelle Sandbank MPA",              50.3,  50.9,    1.3,    2.0),
+    MPABox("Channel Islands MPA",                  49.0,  49.8,   -3.0,   -1.8),
+
+    # Gulf of Mexico
+    MPABox("Flower Garden Banks NMS",              27.5,  28.3,  -94.5,  -93.5),
+    MPABox("Florida Keys NMS",                     24.3,  25.7,  -82.0,  -80.5),
+    MPABox("Dry Tortugas NP",                      24.5,  24.8,  -83.2,  -82.7),
+    MPABox("Gulf of Mexico Deep-Sea Corals",       26.0,  29.0,  -93.0,  -87.0),
+    MPABox("Sian Ka'an Biosphere Reserve",         19.0,  20.5,  -88.0,  -87.2),
+
     # Southeast Asia / Coral Triangle
     MPABox("Tubbataha Reef NMP",                    8.5,  10.5,  119.0,  120.5),
     MPABox("Raja Ampat MPA",                       -2.5,   1.5,  129.0,  132.0),
