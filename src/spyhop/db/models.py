@@ -74,7 +74,7 @@ class VesselPosition(Base):
 
     # --- Kinematic / behavioural fields (mirroring Vessel dataclass) ---------
     speed_knots: Mapped[float] = mapped_column(Float, default=0.0)
-    flag: Mapped[str] = mapped_column(String(10), default="UNK")
+    flag: Mapped[str] = mapped_column(String(20), default="UNK")
     vessel_type: Mapped[str] = mapped_column(String(50), default="unknown")
     ais_gap_hours: Mapped[float] = mapped_column(Float, default=0.0)
     loitering_hours: Mapped[float] = mapped_column(Float, default=0.0)
