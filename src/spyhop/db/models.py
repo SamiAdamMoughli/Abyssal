@@ -518,9 +518,9 @@ class GFWVesselRegistry(Base):
     mmsi: Mapped[str] = mapped_column(String(20), nullable=False, primary_key=True)
     year: Mapped[int] = mapped_column(Integer, nullable=False, primary_key=True)
 
-    flag_ais: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
-    flag_registry: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
-    flag_gfw: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    flag_ais: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    flag_registry: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    flag_gfw: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
     vessel_class_inferred: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     vessel_class_inferred_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)

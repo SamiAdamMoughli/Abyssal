@@ -615,6 +615,11 @@ def load_gfw_vessel_registry(csv_path: str | None = None) -> dict[str, Any]:
 
         cur.execute("TRUNCATE TABLE gfw_vessel_registry;")
 
+        NULL_SENTINEL = "\\N"
+
+        def _null(v):
+            return NULL_SENTINEL if v is None else v
+
         buf = io.StringIO()
         writer = csv.writer(buf, delimiter="\t", lineterminator="\n")
 
@@ -624,20 +629,20 @@ def load_gfw_vessel_registry(csv_path: str | None = None) -> dict[str, Any]:
                 writer.writerow([
                     row["mmsi"].strip(),
                     int(row["year"]) if row["year"].strip() else 0,
-                    _parse_str(row.get("flag_ais", "")),
-                    _parse_str(row.get("flag_registry", "")),
-                    _parse_str(row.get("flag_gfw", "")),
-                    _parse_str(row.get("vessel_class_inferred", "")),
-                    _parse_float(row.get("vessel_class_inferred_score", "")),
-                    _parse_str(row.get("vessel_class_registry", "")),
-                    _parse_str(row.get("vessel_class_gfw", "")),
-                    _parse_bool(row.get("self_reported_fishing_vessel", "")),
-                    _parse_float(row.get("length_m_gfw", "")),
-                    _parse_float(row.get("engine_power_kw_gfw", "")),
-                    _parse_float(row.get("tonnage_gt_gfw", "")),
-                    _parse_str(row.get("registries_listed", "")),
-                    _parse_float(row.get("active_hours", "")),
-                    _parse_float(row.get("fishing_hours", "")),
+                    _null(_parse_str(row.get("flag_ais", ""))),
+                    _null(_parse_str(row.get("flag_registry", ""))),
+                    _null(_parse_str(row.get("flag_gfw", ""))),
+                    _null(_parse_str(row.get("vessel_class_inferred", ""))),
+                    _null(_parse_float(row.get("vessel_class_inferred_score", ""))),
+                    _null(_parse_str(row.get("vessel_class_registry", ""))),
+                    _null(_parse_str(row.get("vessel_class_gfw", ""))),
+                    _null(_parse_bool(row.get("self_reported_fishing_vessel", ""))),
+                    _null(_parse_float(row.get("length_m_gfw", ""))),
+                    _null(_parse_float(row.get("engine_power_kw_gfw", ""))),
+                    _null(_parse_float(row.get("tonnage_gt_gfw", ""))),
+                    _null(_parse_str(row.get("registries_listed", ""))),
+                    _null(_parse_float(row.get("active_hours", ""))),
+                    _null(_parse_float(row.get("fishing_hours", ""))),
                 ])
 
         buf.seek(0)
@@ -645,14 +650,12 @@ def load_gfw_vessel_registry(csv_path: str | None = None) -> dict[str, Any]:
             buf,
             "gfw_vessel_registry",
             sep="\t",
-            null="None",
+            null="\\N",
             columns=col_order,
         )
         conn.commit()
 
-        cur.execute(
-            "REFRESH MATERIALIZED VIEW CONCURRENTLY gfw_vessel_latest;"
-        )
+        cur.execute("REFRESH MATERIALIZED VIEW gfw_vessel_latest;")
         conn.commit()
 
         cur.execute("SELECT COUNT(*) FROM gfw_vessel_registry;")
