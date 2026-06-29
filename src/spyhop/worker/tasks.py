@@ -18,7 +18,6 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-import h3
 import redis as sync_redis_lib
 import ujson
 from celery.utils.log import get_task_logger
@@ -183,7 +182,6 @@ def fetch_gfw_vessels(self: Any) -> dict[str, Any]:
 
         risk_score = min(raw_score, 100.0)
         top_reason = triggered[0]["label"] if triggered else None
-        cell = h3.latlng_to_cell(v["lat"], v["lon"], 7)
 
         rows.append({
             "mmsi":                      v["mmsi"],
@@ -206,7 +204,6 @@ def fetch_gfw_vessels(self: Any) -> dict[str, Any]:
             "behavior_confidence":       state["behavior_confidence"],
             "cog_degrees":               -1.0,
             "nearest_mpa_nm":            -1.0,
-            "h3_index":                  cell,
             "risk_score":                risk_score,
             "top_reason_label":          top_reason,
             "reasons_json":              triggered[:5],
@@ -336,7 +333,6 @@ def fetch_digitraffic_vessels(self: Any) -> dict[str, Any]:
             top_reason = f"In MPA: {mpa_name}"
 
         risk_score = min(raw_score, 100.0)
-        cell = h3.latlng_to_cell(lat, lon, 5)
         score_map[mmsi] = risk_score
 
         rows.append({
@@ -355,7 +351,6 @@ def fetch_digitraffic_vessels(self: Any) -> dict[str, Any]:
             "top_reason_label":          top_reason,
             "reasons_json":              [],
             "data_source":               "digitraffic",
-            "h3_index":                  cell,
         })
 
     _upsert_vessels_sync(rows)
@@ -667,7 +662,6 @@ def _build_vessel_rows(assessments: list) -> list[dict[str, Any]]:
             "sst_at_thermal_front": v.sst_at_thermal_front,
             "historical_risk_score": v.historical_risk_score,
             "verified_vessel_type": v.verified_vessel_type,
-            "h3_index": h3.latlng_to_cell(v.lat, v.lon, 7),
             "risk_score": ta.score,
             "top_reason_label": (
                 ta.top_reason.label if ta.top_reason else None
@@ -1426,304 +1420,6 @@ def _enrich_vessel_profiles_sync(
             )
 
     return result
-
-
-# ---------------------------------------------------------------------------
-# Task: compute_h3_context  (every 6 hours)
-# ---------------------------------------------------------------------------
-
-
-@celery_app.task(
-    name="spyhop.worker.tasks.compute_h3_context",
-    soft_time_limit=600,
-    time_limit=720,
-)
-def compute_h3_context() -> dict[str, Any]:
-    """Pre-bake environmental + biological context for active H3 cells.
-
-    Queries Open-Meteo (marine conditions) and OBIS (species presence) for
-    every H3 cell that currently has vessels in PostGIS, then stores the
-    fused context in Redis under h3:context:{cell_id} with a 12-hour TTL.
-    """
-    import asyncio
-
-    log.info("compute_h3_context.start")
-
-    with SyncSession() as session:
-        rows = session.execute(
-            text(
-                "SELECT DISTINCT h3_index, "
-                "ST_X(position) AS lon, ST_Y(position) AS lat "
-                "FROM vessel_positions "
-                "WHERE h3_index IS NOT NULL"
-            )
-        ).fetchall()
-
-    if not rows:
-        log.info("compute_h3_context.no_cells")
-        return {"status": "ok", "cells": 0}
-
-    cell_ids = [r.h3_index for r in rows]
-    cell_centres = {r.h3_index: (r.lat, r.lon) for r in rows}
-
-    # Mark cells inside protected areas
-    protected_flags: dict[str, str | None] = {}
-    try:
-        from backend.app.geo import is_in_protected_area
-        for cell_id, (lat, lon) in cell_centres.items():
-            protected_flags[cell_id] = (
-                "Marine Protected Area"
-                if is_in_protected_area(lat, lon) else None
-            )
-    except Exception as exc:
-        log.warning("compute_h3_context.mpa_error: %s", exc)
-        protected_flags = {cid: None for cid in cell_ids}
-
-    from spyhop.enrichment.openmeteo import fetch_marine_conditions
-    from spyhop.enrichment.obis import fetch_species_presence
-
-    async def _gather():
-        weather, species = await asyncio.gather(
-            fetch_marine_conditions(cell_ids),
-            fetch_species_presence(cell_ids),
-            return_exceptions=True,
-        )
-        return (
-            weather if isinstance(weather, dict) else {},
-            species if isinstance(species, dict) else {},
-        )
-
-    weather_map, species_map = asyncio.run(_gather())
-
-    pipe = _sync_redis.pipeline(transaction=False)
-    for cell_id in cell_ids:
-        w = weather_map.get(cell_id, {})
-        s = species_map.get(cell_id, {})
-        protected = protected_flags.get(cell_id)
-
-        context = {
-            "wave_height_m": w.get("wave_height_m"),
-            "wave_period_s": w.get("wave_period_s"),
-            "current_velocity_ms": w.get("current_velocity_ms"),
-            "sea_surface_temp_c": w.get("sea_surface_temp_c"),
-            "cetaceans": s.get("cetaceans", []),
-            "sea_turtles": s.get("sea_turtles", []),
-            "sharks_rays": s.get("sharks_rays", []),
-            "threatened_species": s.get("threatened_species", []),
-            "total_species": s.get("total_species", 0),
-            "bio_risk": s.get("bio_risk", "none"),
-            "protected_zone": protected,
-            "is_sanctuary": protected is not None,
-        }
-        pipe.setex(
-            f"h3:context:{cell_id}",
-            43_200,     # 12-hour TTL
-            ujson.dumps(context),
-        )
-
-    pipe.execute()
-    n_weather = sum(1 for w in weather_map.values() if w)
-    n_species = sum(1 for s in species_map.values() if s)
-    log.info(
-        "compute_h3_context.done cells=%d weather=%d species=%d",
-        len(cell_ids), n_weather, n_species,
-    )
-    return {"status": "ok", "cells": len(cell_ids)}
-
-
-# ---------------------------------------------------------------------------
-# Task: snapshot_vessel_positions  (hourly)
-# ---------------------------------------------------------------------------
-
-
-@celery_app.task(
-    name="spyhop.worker.tasks.snapshot_vessel_positions",
-    soft_time_limit=120,
-    time_limit=180,
-)
-def snapshot_vessel_positions() -> dict[str, Any]:
-    """Append current vessel_positions into vessel_position_snapshots.
-
-    Runs hourly.  The h3_index_5 column is computed here in Python so the
-    analytics endpoints never have to call h3_to_parent at query time.
-    Vessels with no h3_index (position not yet geocoded) are skipped.
-    """
-    snapped_at = datetime.now(timezone.utc)
-    rows: list[dict[str, Any]] = []
-
-    with SyncSession() as session:
-        vessels = session.execute(
-            select(VesselPosition).where(VesselPosition.h3_index.isnot(None))
-        ).scalars().all()
-
-        for v in vessels:
-            rows.append({
-                "mmsi": v.mmsi,
-                "h3_index_7": v.h3_index,
-                "h3_index_5": h3.h3_to_parent(v.h3_index, 5),
-                "risk_score": v.risk_score,
-                "flag": v.flag,
-                "vessel_type": v.vessel_type,
-                "ais_gap_hours": v.ais_gap_hours,
-                "loitering_hours": v.loitering_hours,
-                "in_protected_area": v.in_protected_area,
-                "rendezvous_duration_hours": v.rendezvous_duration_hours,
-                "spoofing_flag": v.spoofing_flag,
-                "snapped_at": snapped_at,
-            })
-        session.bulk_insert_mappings(VesselPositionSnapshot, rows)
-        session.commit()
-
-    log.info("snapshot_vessel_positions inserted=%d snapped_at=%s", len(rows), snapped_at.isoformat())
-    return {"inserted": len(rows), "snapped_at": snapped_at.isoformat()}
-
-
-# ---------------------------------------------------------------------------
-# Task: materialize_h3_corridors  (weekly, Sunday 01:00 UTC)
-# ---------------------------------------------------------------------------
-
-
-@celery_app.task(
-    name="spyhop.worker.tasks.materialize_h3_corridors",
-    soft_time_limit=600,
-    time_limit=720,
-)
-def materialize_h3_corridors() -> dict[str, Any]:
-    """Aggregate the past week of snapshots into h3_risk_corridors.
-
-    Groups vessel_position_snapshots by h3_index_5 for the rolling 7-day
-    window ending now.  Per-MMSI peak values are used so a vessel observed
-    multiple times in a cell is counted once.
-
-    corridor_score = (high_risk*3 + med_risk + dark*2 + rendezvous*2.5 + mpa*2)
-                     × sqrt(persistence_weeks)
-
-    The sqrt dampening prevents a single very active week from dominating;
-    persistence (recurring across many weeks) is the structural corridor signal.
-    """
-    from collections import Counter  # noqa: PLC0415
-
-    now = datetime.now(timezone.utc)
-    # ISO week starts on Monday
-    days_since_monday = now.weekday()
-    week_start = (now - timedelta(days=days_since_monday)).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-    window_start = week_start - timedelta(days=7)
-
-    with SyncSession() as session:
-        snap_rows = session.execute(
-            select(VesselPositionSnapshot).where(
-                VesselPositionSnapshot.snapped_at >= window_start,
-                VesselPositionSnapshot.h3_index_5.isnot(None),
-            )
-        ).scalars().all()
-
-        by_cell: dict[str, list] = defaultdict(list)
-        for row in snap_rows:
-            by_cell[row.h3_index_5].append(row)
-
-        upserted = 0
-        for cell, cell_rows in by_cell.items():
-            # Collapse to per-MMSI peak — avoid inflating counts for vessels
-            # seen in multiple hourly snapshots within the same cell.
-            mmsi_peak: dict[str, float] = {}
-            mmsi_flag: dict[str, str] = {}
-            mmsi_type: dict[str, str] = {}
-            mmsi_dark: dict[str, bool] = {}
-            mmsi_rvz: dict[str, bool] = {}
-            mmsi_mpa: dict[str, bool] = {}
-
-            for r in cell_rows:
-                if r.risk_score > mmsi_peak.get(r.mmsi, -1.0):
-                    mmsi_peak[r.mmsi] = r.risk_score
-                    mmsi_flag[r.mmsi] = r.flag
-                    mmsi_type[r.mmsi] = r.vessel_type
-                mmsi_dark[r.mmsi] = mmsi_dark.get(r.mmsi, False) or (r.ais_gap_hours >= 6.0)
-                mmsi_rvz[r.mmsi] = mmsi_rvz.get(r.mmsi, False) or (r.rendezvous_duration_hours > 0)
-                mmsi_mpa[r.mmsi] = mmsi_mpa.get(r.mmsi, False) or r.in_protected_area
-
-            scores = list(mmsi_peak.values())
-            n = len(scores)
-            high_risk = sum(1 for s in scores if s >= 70)
-            med_risk = sum(1 for s in scores if 40 <= s < 70)
-            dark_count = sum(1 for v in mmsi_dark.values() if v)
-            rvz_count = sum(1 for v in mmsi_rvz.values() if v)
-            mpa_count = sum(1 for v in mmsi_mpa.values() if v)
-            avg_score = sum(scores) / n if n else 0.0
-            max_score = max(scores) if scores else 0.0
-            dom_flag = Counter(mmsi_flag.values()).most_common(1)[0][0] if mmsi_flag else None
-            dom_type = Counter(mmsi_type.values()).most_common(1)[0][0] if mmsi_type else None
-
-            # Persistence: distinct ISO weeks in full snapshot history where
-            # this cell had at least one high-risk vessel.
-            persistence = session.execute(
-                text(
-                    """
-                    SELECT COUNT(DISTINCT date_trunc('week', snapped_at))
-                    FROM vessel_position_snapshots
-                    WHERE h3_index_5 = :cell AND risk_score >= 70
-                    """
-                ),
-                {"cell": cell},
-            ).scalar() or 1
-
-            corridor_score = (
-                high_risk * 3.0
-                + med_risk * 1.0
-                + dark_count * 2.0
-                + rvz_count * 2.5
-                + mpa_count * 2.0
-            ) * (persistence ** 0.5)
-
-            stmt = pg_insert(H3RiskCorridor).values(
-                h3_cell=cell,
-                week_start=week_start.date(),
-                vessel_count=n,
-                high_risk_count=high_risk,
-                med_risk_count=med_risk,
-                dark_vessel_count=dark_count,
-                rendezvous_count=rvz_count,
-                mpa_incursion_count=mpa_count,
-                avg_risk_score=avg_score,
-                max_risk_score=max_score,
-                dominant_flag=dom_flag,
-                dominant_vessel_type=dom_type,
-                persistence_weeks=int(persistence),
-                corridor_score=corridor_score,
-                materialized_at=now,
-            ).on_conflict_do_update(
-                constraint="pk_h3_risk_corridors",
-                set_={
-                    "vessel_count": n,
-                    "high_risk_count": high_risk,
-                    "med_risk_count": med_risk,
-                    "dark_vessel_count": dark_count,
-                    "rendezvous_count": rvz_count,
-                    "mpa_incursion_count": mpa_count,
-                    "avg_risk_score": avg_score,
-                    "max_risk_score": max_score,
-                    "dominant_flag": dom_flag,
-                    "dominant_vessel_type": dom_type,
-                    "persistence_weeks": int(persistence),
-                    "corridor_score": corridor_score,
-                    "materialized_at": now,
-                },
-            )
-            session.execute(stmt)
-            upserted += 1
-
-        session.commit()
-
-    log.info("materialize_h3_corridors cells=%d week=%s", upserted, week_start.date())
-    return {"cells_upserted": upserted, "week_start": str(week_start.date())}
-
-
-# ---------------------------------------------------------------------------
-# Task: prune_vessel_snapshots  (daily)
-# ---------------------------------------------------------------------------
-
-
 @celery_app.task(
     name="spyhop.worker.tasks.prune_vessel_snapshots",
     soft_time_limit=60,

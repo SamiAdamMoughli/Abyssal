@@ -106,11 +106,6 @@ celery_app.conf.update(
             "schedule": crontab(minute=5),   # :05 past every hour
             "options": {"queue": "sync"},
         },
-        "compute-h3-context-every-6h": {
-            "task": "spyhop.worker.tasks.compute_h3_context",
-            "schedule": crontab(minute=30, hour="*/6"),
-            "options": {"queue": "sync"},
-        },
         "brain-evaluate-spatialized-batch-every-30s": {
             "task": "brain.evaluate_spatialized_batch",
             "schedule": 30.0,
@@ -158,11 +153,6 @@ celery_app.conf.update(
         "corridor-snapshot-hourly": {
             "task": "spyhop.worker.tasks.snapshot_vessel_positions",
             "schedule": crontab(minute=50),   # :50 past every hour
-            "options": {"queue": "sync"},
-        },
-        "corridor-materialize-weekly": {
-            "task": "spyhop.worker.tasks.materialize_h3_corridors",
-            "schedule": crontab(hour=1, minute=0, day_of_week=0),
             "options": {"queue": "sync"},
         },
         "corridor-prune-daily": {

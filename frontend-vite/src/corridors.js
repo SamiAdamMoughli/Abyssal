@@ -17,7 +17,6 @@
  * refreshed once on enable and not re-fetched on pan/zoom.
  */
 
-import { cellToBoundary } from "h3-js";
 import { state } from "./state.js";
 
 const ANALYTICS_URL = window.__ENV?.ANALYTICS_URL ?? "http://localhost:8001";
@@ -97,22 +96,18 @@ async function _loadCorridors() {
     const color = _scoreColor(norm);
     const opacity = 0.15 + norm * 0.5; // 0.15 → 0.65
 
-    let latlngs;
-    try {
-      latlngs = cellToBoundary(cell.h3_cell).map(([lat, lng]) => [lat, lng]);
-    } catch {
-      continue;
-    }
+    if (cell.lat == null || cell.lon == null) continue;
 
-    const poly = L.polygon(latlngs, {
+    const circle = L.circleMarker([cell.lat, cell.lon], {
+      radius: 6 + norm * 10,
       color,
-      weight: 0.6,
-      opacity: 0.7,
+      weight: 1,
+      opacity: 0.8,
       fillColor: color,
       fillOpacity: opacity,
     }).addTo(_corridorLayer);
 
-    poly.bindTooltip(_corridorTooltip(cell), { sticky: true, opacity: 0.92 });
+    circle.bindTooltip(_corridorTooltip(cell), { sticky: true, opacity: 0.92 });
   }
 }
 
@@ -164,18 +159,11 @@ async function _loadDarkGaps() {
   _darkGapLayer = L.layerGroup().addTo(state.map);
 
   for (const gap of gaps) {
-    // Gap features carry from/to H3 cell IDs.  Derive centroids via
-    // cellToBoundary centroid average rather than importing h3.cellToLatLng,
-    // which isn't exported from some h3-js builds.
-    let fromPt, toPt;
-    try {
-      fromPt = _h3Centroid(gap.properties?.from_h3_5 ?? gap.from_h3_5);
-      toPt = _h3Centroid(gap.properties?.to_h3_5 ?? gap.to_h3_5);
-    } catch {
-      continue;
-    }
-
     const props = gap.properties ?? gap;
+    const fromPt = props.from_lat != null ? [props.from_lat, props.from_lon] : null;
+    const toPt   = props.to_lat   != null ? [props.to_lat,   props.to_lon]   : null;
+    if (!fromPt || !toPt) continue;
+
     const implausible = props.implausible ?? false;
     const color = implausible ? "#e74c3c" : "#f39c12";
     const dashArray = implausible ? null : "6 5";
@@ -191,12 +179,6 @@ async function _loadDarkGaps() {
   }
 }
 
-function _h3Centroid(cellId) {
-  const verts = cellToBoundary(cellId);
-  const lat = verts.reduce((s, v) => s + v[0], 0) / verts.length;
-  const lng = verts.reduce((s, v) => s + v[1], 0) / verts.length;
-  return [lat, lng];
-}
 
 function _darkGapTooltip(p) {
   const speed = p.implied_speed_kn != null ? `${p.implied_speed_kn.toFixed(1)} kn` : "—";

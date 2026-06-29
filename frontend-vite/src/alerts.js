@@ -1,8 +1,11 @@
 /**
  * alerts.js — Real-time brain alert feed + hex flash integration.
  *
- * Opens a WebSocket to /ws/alerts (served by the spatial engine on port 8000).
- * Each incoming frame is one AlertFinding JSON object. On receipt:
+ * On init:
+ *   1. Hydrate sidebar from GET /api/alerts (persisted, includes ACK state).
+ *   2. Open WebSocket to /ws/alerts for live incoming findings.
+ *
+ * Each incoming WS frame is one AlertFinding JSON object. On receipt:
  *   1. Prepend the alert to the sidebar list (max MAX_ALERTS shown).
  *   2. Flash the corresponding H3 hex cell on the map.
  *   3. Pulse the alert badge count in the topbar.
@@ -12,7 +15,6 @@
 
 import { API_URL } from './config.js';
 import { state } from './state.js';
-import { flashCell } from './h3grid.js';
 
 const MAX_ALERTS = 50;
 const WS_URL = API_URL.replace(/^http/, 'ws') + '/ws/alerts';
@@ -24,8 +26,6 @@ const SEVERITY_ICON = {
   info:     '🔵',
 };
 
-const SEVERITY_ORDER = { critical: 0, alert: 1, warning: 2, info: 3 };
-
 let _reconnectDelay = 2000;
 let _ws = null;
 
@@ -33,14 +33,33 @@ let _ws = null;
 // Public
 // ---------------------------------------------------------------------------
 
-export function initAlerts() {
+export async function initAlerts() {
   state.alertsCache = [];
+  await _hydrate();
   _connect();
   _renderAlerts();
 }
 
 export function getAlertCount() {
-  return state.alertsCache.length;
+  return state.alertsCache.filter(a => !a.acknowledged).length;
+}
+
+// ---------------------------------------------------------------------------
+// Hydration — load persisted alerts from DB on startup
+// ---------------------------------------------------------------------------
+
+async function _hydrate() {
+  try {
+    const res = await fetch(`${API_URL}/api/alerts?limit=50&status=all`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (Array.isArray(data.alerts)) {
+      // DB returns newest-first; unshift to match sidebar order expectation
+      state.alertsCache = data.alerts.slice(0, MAX_ALERTS);
+    }
+  } catch {
+    // Backend may not be ready; WS will catch up
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -81,7 +100,9 @@ function _connect() {
 // ---------------------------------------------------------------------------
 
 function _onAlert(alert) {
-  // Prepend; cap list length.
+  // Skip if already in cache (dedup by alert_id); ignore messages without one
+  if (!alert.alert_id || state.alertsCache.some(a => a.alert_id === alert.alert_id)) return;
+
   state.alertsCache.unshift(alert);
   if (state.alertsCache.length > MAX_ALERTS) {
     state.alertsCache.length = MAX_ALERTS;
@@ -90,12 +111,6 @@ function _onAlert(alert) {
   _renderAlerts();
   _updateBadge();
 
-  // Flash the map hex.
-  if (alert.h3_index) {
-    flashCell(alert.h3_index, alert.severity);
-  }
-
-  // Also pan to the vessel if it's a critical alert and the map isn't already nearby.
   if (alert.severity === 'critical' && alert.lat != null && alert.lon != null) {
     const center = state.map.getCenter();
     const dist = Math.hypot(center.lat - alert.lat, center.lng - alert.lon);
@@ -104,6 +119,35 @@ function _onAlert(alert) {
         duration: 1.2,
       });
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Acknowledge
+// ---------------------------------------------------------------------------
+
+async function _acknowledge(alertId, cardEl) {
+  cardEl.classList.add('alert-acking');
+  try {
+    const res = await fetch(`${API_URL}/api/alerts/${alertId}/acknowledge`, {
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    // Update cache entry in-place
+    const entry = state.alertsCache.find(a => a.alert_id === alertId);
+    if (entry) {
+      entry.acknowledged = true;
+      entry.acknowledged_by = data.acknowledged_by;
+      entry.acknowledged_at = data.acknowledged_at;
+    }
+
+    _renderAlerts();
+    _updateBadge();
+  } catch (err) {
+    console.warn('[alerts] ack failed:', err);
+    cardEl.classList.remove('alert-acking');
   }
 }
 
@@ -122,9 +166,10 @@ function _renderAlerts() {
 
   panel.innerHTML = state.alertsCache.map(_alertCard).join('');
 
-  // Click-to-focus vessel on map.
+  // Click card → fly to vessel
   panel.querySelectorAll('[data-mmsi]').forEach(card => {
-    card.addEventListener('click', () => {
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.alert-ack-btn')) return;
       const mmsi = card.dataset.mmsi;
       const entry = state.markersByMmsi?.[mmsi];
       if (entry) {
@@ -133,22 +178,36 @@ function _renderAlerts() {
       }
     });
   });
+
+  // ACK button clicks
+  panel.querySelectorAll('.alert-ack-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const card = btn.closest('.alert-card');
+      _acknowledge(btn.dataset.alertId, card);
+    });
+  });
 }
 
 function _alertCard(a) {
-  const icon = SEVERITY_ICON[a.severity] ?? '⚪';
-  const age  = _relativeTime(a.triggered_at);
+  const icon    = SEVERITY_ICON[a.severity] ?? '⚪';
+  const age     = _relativeTime(a.triggered_at);
   const mmsiAttr = a.mmsi ? `data-mmsi="${a.mmsi}"` : '';
-  const coords = (a.lat != null && a.lon != null)
+  const coords  = (a.lat != null && a.lon != null)
     ? `<span class="alert-coords">${a.lat.toFixed(3)}°, ${a.lon.toFixed(3)}°</span>`
     : '';
 
+  const ackState = a.acknowledged
+    ? `<span class="alert-acked-label" title="Acknowledged by ${_esc(a.acknowledged_by)}">✓ ACK</span>`
+    : `<button class="alert-ack-btn" data-alert-id="${_esc(a.alert_id)}" title="Acknowledge this alert">ACK</button>`;
+
   return `
-    <div class="alert-card alert-${a.severity}" ${mmsiAttr}>
+    <div class="alert-card alert-${a.severity}${a.acknowledged ? ' alert-acknowledged' : ''}" ${mmsiAttr}>
       <div class="alert-header">
         <span class="alert-icon">${icon}</span>
         <span class="alert-label">${a.rule_label}</span>
         <span class="alert-age">${age}</span>
+        ${ackState}
       </div>
       <div class="alert-body">
         ${a.mmsi ? `<span class="alert-mmsi">MMSI ${a.mmsi}</span>` : ''}
@@ -161,9 +220,11 @@ function _alertCard(a) {
 function _updateBadge() {
   const badge = document.getElementById('alert-badge');
   if (!badge) return;
-  const critCount = state.alertsCache.filter(a => a.severity === 'critical').length;
-  badge.textContent = critCount || state.alertsCache.length || '';
-  badge.style.display = state.alertsCache.length ? 'flex' : 'none';
+  const unacked = state.alertsCache.filter(a => !a.acknowledged);
+  const critCount = unacked.filter(a => a.severity === 'critical').length;
+  const count = unacked.length;
+  badge.textContent = count || '';
+  badge.style.display = count ? 'flex' : 'none';
   badge.classList.toggle('alert-badge-critical', critCount > 0);
 }
 

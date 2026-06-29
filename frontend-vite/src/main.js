@@ -4,14 +4,8 @@ import { state } from "./state.js";
 import { fmtDate } from "./utils.js";
 import { loadData, currentDates } from "./api.js";
 import { renderCards } from "./ui.js";
-import { initGlobalPhase, currentPhase, enterRegionPhase } from "./phase.js";
+import { initGlobalPhase, currentPhase } from "./phase.js";
 import { getVisibleVessels } from "./vessels.js";
-import {
-  renderHexGrid,
-  clearHexGrid,
-  loadFromHexSelection,
-  hasSelection,
-} from "./h3grid.js";
 import { initAlerts } from "./alerts.js";
 import { toggleHeatmap, toggleWeather, toggleCorridors, toggleDarkGaps, refreshStatsBar } from "./overlays.js";
 import { initAuth } from "./auth.js";
@@ -82,12 +76,11 @@ function setBaseLayer(name) {
   _activeBase = name;
 }
 
-// Loading overlay (created dynamically so the HTML stays clean)
+// Loading overlay
 const ov = document.createElement("div");
 ov.id = "map-overlay";
 ov.className = "map-overlay";
-ov.innerHTML =
-  '<div class="spinner"></div><div>CONNECTING TO DATA SOURCE…</div>';
+ov.innerHTML = '<div class="spinner"></div><div>CONNECTING TO DATA SOURCE…</div>';
 document.getElementById("map").appendChild(ov);
 
 // ==================================================================
@@ -144,34 +137,6 @@ function searchThisArea() {
 document.getElementById("search-btn").addEventListener("click", searchThisArea);
 
 // ==================================================================
-// HEX GRID MODE
-// ==================================================================
-let _hexModeActive = false;
-
-function setHexMode(active) {
-  _hexModeActive = active;
-  const hexBtn = document.getElementById("hex-mode-btn");
-  const searchBtn = document.getElementById("hex-search-btn");
-  const normalBtn = document.getElementById("search-btn");
-  hexBtn.classList.toggle("active", active);
-  searchBtn.style.display = active ? "inline-flex" : "none";
-  normalBtn.style.display = active ? "none" : "inline-flex";
-  if (active) {
-    renderHexGrid();
-  } else {
-    clearHexGrid();
-  }
-}
-
-document
-  .getElementById("hex-mode-btn")
-  .addEventListener("click", () => setHexMode(!_hexModeActive));
-
-document.getElementById("hex-search-btn").addEventListener("click", () => {
-  if (hasSelection()) loadFromHexSelection();
-});
-
-// ==================================================================
 // SIDEBAR CONTROLS
 // ==================================================================
 document.getElementById("search-input").addEventListener("input", (e) => {
@@ -189,7 +154,7 @@ document.getElementById("sort-select").addEventListener("change", (e) => {
 });
 
 // ==================================================================
-// EMERGENCY SLIDING PANEL TOGGLES
+// ALERT PANEL TOGGLES
 // ==================================================================
 const alertToggleBtn = document.querySelector(".alert-toggle-btn");
 const alertPanel =
@@ -238,23 +203,13 @@ document.getElementById("cat-filters").addEventListener("click", (e) => {
 });
 
 // ==================================================================
-// MAP MOVE — show "Search this area" button + area warning
+// MAP MOVE — show "Search this area" button
 // ==================================================================
 function maybeShowButton() {
-  if (state.ready && !_hexModeActive && currentPhase() === 'REGION')
+  if (state.ready && currentPhase() === 'REGION')
     document.getElementById("search-btn").classList.add("show");
 }
-function updateAreaWarning() {
-  const b = state.map.getBounds();
-  const span = Math.max(b.getNorth() - b.getSouth(), b.getEast() - b.getWest());
-  document.getElementById("area-warn").style.display =
-    span > 15 ? "block" : "none";
-}
-state.map.on("moveend", () => {
-  maybeShowButton();
-  updateAreaWarning();
-  if (_hexModeActive) renderHexGrid();
-});
+state.map.on("moveend", maybeShowButton);
 
 // ==================================================================
 // STARTUP — enter global level-select phase
@@ -267,11 +222,9 @@ state.map.on("moveend", () => {
   initAuth();
   await refreshStatsBar();
 
-  // Nav rail status dot — reflects WebSocket connection state
   _updateNavDot();
   setInterval(_updateNavDot, 5000);
 
-  // Quick filter strip wiring (ops sidebar)
   document.getElementById("qf-strip")?.addEventListener("click", (e) => {
     const btn = e.target.closest(".qf-btn");
     if (!btn) return;
@@ -279,7 +232,6 @@ state.map.on("moveend", () => {
     _applyQuickFilters();
   });
 
-  // Overlay toggle wiring
   document.getElementById("overlay-heatmap")?.addEventListener("change", (e) => {
     toggleHeatmap(e.target.checked);
   });
