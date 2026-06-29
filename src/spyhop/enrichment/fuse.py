@@ -1,10 +1,14 @@
 """Vessel data fusion with cascading fallback strategy.
 
-Identity fields follow a three-tier priority chain:
+Identity fields follow a five-tier priority chain:
 
-  P1  GFW Vessel API   — structured registry from 30+ national sources
-  P2  Wikidata SPARQL  — community-curated, covers major named vessels
-  P3  DB record        — already scored by our own pipeline (always present)
+  P1  GFW Vessel API        — structured registry from 30+ national sources
+  P2  Equasis               — EMSA-managed static data + PSC inspections
+  P3  Wikidata SPARQL       — community-curated, covers major named vessels
+  P4  ITU Ship Station List — MMSI / callsign / flag (official ITU record)
+  P5  EU Vessel Register    — EU fishing fleet (CFR-keyed, EU flags only)
+  P6  Canadian NMID         — Transport Canada (MMSI 316xxx only)
+  P7  DB record             — already scored by our own pipeline (always present)
 
 Live anomaly history and port geocoding run in parallel (no fallback needed —
 they either have data or they don't).
@@ -19,7 +23,11 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from .gfw import fetch_identity, fetch_event_history
+from .canadian_nmid import fetch_identity as fetch_canadian
+from .equasis import fetch_identity as fetch_equasis
+from .eu_register import fetch_identity as fetch_eu_register
+from .gfw import fetch_event_history, fetch_identity
+from .itu import fetch_identity as fetch_itu
 from .ports import geocode_destination
 from .wikidata import fetch_by_imo
 
@@ -36,57 +44,121 @@ async def _resolve_identity(
     mmsi: str,
     db_vessel: dict[str, Any],
 ) -> dict[str, Any]:
-    """Cascading identity resolution: GFW → Wikidata → DB.
+    """Cascading identity resolution across all configured registries.
 
-    Fires GFW and Wikidata in parallel, then merges with GFW taking
-    priority. If GFW returns a different IMO than the DB record, we
-    re-query Wikidata with the corrected IMO.
+    Priority order (highest first):
+      GFW → Equasis → Wikidata → ITU → EU Register → Canadian NMID → DB
+
+    P1 (GFW) and P3 (Wikidata) fire in parallel with the other tier-2 sources
+    to minimise wall-clock latency.  Equasis, ITU, and registry sources also
+    run in parallel.  Results are merged with higher-priority sources winning.
     """
     imo_hint = db_vessel.get("imo")
 
-    gfw, wiki = await asyncio.gather(
-        fetch_identity(mmsi),
-        fetch_by_imo(imo_hint),
+    # Tier 1 + tier 3 fire together (both need IMO hint)
+    raw = await asyncio.gather(
+        fetch_identity(mmsi),                          # GFW
+        fetch_equasis(mmsi=mmsi, imo=imo_hint),        # Equasis
+        fetch_by_imo(imo_hint),                        # Wikidata
+        fetch_itu(mmsi),                               # ITU Ship Station List
+        fetch_eu_register(mmsi=mmsi),                  # EU Vessel Register
+        fetch_canadian(mmsi),                          # Canadian NMID
         return_exceptions=True,
     )
-    if isinstance(gfw, Exception):
-        gfw = {}
-    if isinstance(wiki, Exception):
-        wiki = {}
+    gfw: dict[str, Any] = raw[0] if isinstance(raw[0], dict) else {}
+    equasis: dict[str, Any] = raw[1] if isinstance(raw[1], dict) else {}
+    wiki: dict[str, Any] = raw[2] if isinstance(raw[2], dict) else {}
+    itu: dict[str, Any] = raw[3] if isinstance(raw[3], dict) else {}
+    eu_reg: dict[str, Any] = raw[4] if isinstance(raw[4], dict) else {}
+    canadian: dict[str, Any] = raw[5] if isinstance(raw[5], dict) else {}
 
-    # Re-query Wikidata if GFW resolved a better IMO
-    gfw_imo = gfw.get("imo") if isinstance(gfw, dict) else None
+    # Re-query Wikidata if GFW resolved a better IMO than the DB record
+    gfw_imo = gfw.get("imo")
     if gfw_imo and gfw_imo != imo_hint:
         try:
             wiki = await fetch_by_imo(gfw_imo)
         except Exception:
             pass
 
-    sources = [
-        s for s, d in [("gfw", gfw), ("wikidata", wiki)]
-        if isinstance(d, dict) and d
+    # Resolved IMO — best available across all sources
+    resolved_imo = _first(
+        gfw.get("imo"),
+        equasis.get("imo"),
+        imo_hint,
+    )
+
+    source_map = [
+        ("gfw", gfw),
+        ("equasis", equasis),
+        ("wikidata", wiki),
+        ("itu", itu),
+        ("eu_vessel_register", eu_reg),
+        ("canadian_nmid", canadian),
     ]
+    active_sources = [s for s, d in source_map if d]
 
     return {
         "gfw_id": _first(gfw.get("gfw_id")),
-        "imo": _first(gfw.get("imo"), imo_hint),
+        "imo": resolved_imo,
         "flag": _first(
             gfw.get("flag"),
+            equasis.get("flag"),
+            itu.get("flag"),
+            eu_reg.get("flag"),
+            canadian.get("flag"),
             wiki.get("flag"),
             db_vessel.get("flag"),
         ),
         "vessel_type": _first(
             gfw.get("vessel_type"),
+            equasis.get("vessel_type"),
             wiki.get("vessel_type"),
+            canadian.get("vessel_type"),
             db_vessel.get("vessel_type"),
         ),
-        "length_m": _first(gfw.get("length_m")),
-        "tonnage_gt": _first(gfw.get("tonnage_gt")),
-        "owner": _first(gfw.get("owner")),
-        "callsign": _first(gfw.get("callsign")),
-        "built_year": _first(gfw.get("built_year"), wiki.get("built_year")),
+        "length_m": _first(
+            gfw.get("length_m"),
+            eu_reg.get("length_m"),
+            canadian.get("length_m"),
+        ),
+        "tonnage_gt": _first(
+            gfw.get("tonnage_gt"),
+            equasis.get("tonnage_gt"),
+            eu_reg.get("tonnage_gt"),
+            canadian.get("tonnage_gt"),
+        ),
+        "owner": _first(
+            gfw.get("owner"),
+            equasis.get("owner"),
+            canadian.get("owner"),
+        ),
+        "callsign": _first(
+            gfw.get("callsign"),
+            itu.get("callsign"),
+            equasis.get("callsign"),
+        ),
+        "built_year": _first(
+            gfw.get("built_year"),
+            equasis.get("built_year"),
+            canadian.get("built_year"),
+            wiki.get("built_year"),
+        ),
         "image_url": _first(wiki.get("image_url")),
-        "_sources": sources,
+        # Equasis-only fields surfaced into the identity block
+        "class_society": equasis.get("class_society"),
+        "manager": equasis.get("manager"),
+        "psc_deficiencies_5y": equasis.get("psc_deficiencies_5y"),
+        "psc_detentions_5y": equasis.get("psc_detentions_5y"),
+        # EU fishing vessel fields
+        "cfr": eu_reg.get("cfr"),
+        "gear_codes": eu_reg.get("gear_codes"),
+        "licence_active": eu_reg.get("licence_active"),
+        # ITU fields
+        "itu_administration": itu.get("administration"),
+        # Canadian NMID fields
+        "port_of_registry": canadian.get("port_of_registry"),
+        "official_number": canadian.get("official_number"),
+        "_sources": active_sources,
     }
 
 
@@ -129,10 +201,20 @@ async def enrich(vessel: dict[str, Any]) -> dict[str, Any]:
             "length_m": identity.get("length_m"),
             "tonnage_gt": identity.get("tonnage_gt"),
             "owner": identity.get("owner"),
+            "manager": identity.get("manager"),
             "callsign": identity.get("callsign"),
             "built_year": identity.get("built_year"),
             "image_url": identity.get("image_url"),
             "gfw_id": identity.get("gfw_id"),
+            "class_society": identity.get("class_society"),
+            "psc_deficiencies_5y": identity.get("psc_deficiencies_5y"),
+            "psc_detentions_5y": identity.get("psc_detentions_5y"),
+            "cfr": identity.get("cfr"),
+            "gear_codes": identity.get("gear_codes"),
+            "licence_active": identity.get("licence_active"),
+            "itu_administration": identity.get("itu_administration"),
+            "port_of_registry": identity.get("port_of_registry"),
+            "official_number": identity.get("official_number"),
             "_sources": identity.get("_sources", []),
         },
         "live_navigation": {
@@ -167,6 +249,19 @@ async def enrich(vessel: dict[str, Any]) -> dict[str, Any]:
         "reasons": vessel.get("reasons", []),
         "data_source": vessel.get("data_source"),
         "updated_at": vessel.get("updated_at"),
+        "gfw_registry": {
+            "geartype": vessel.get("gfw_geartype"),
+            "flag": vessel.get("gfw_flag"),
+            "length_m": vessel.get("gfw_length_m"),
+            "engine_kw": vessel.get("gfw_engine_kw"),
+            "tonnage_gt": vessel.get("gfw_tonnage_gt"),
+            "fishing_hours": vessel.get("gfw_fishing_hours"),
+            "active_hours": vessel.get("gfw_active_hours"),
+            "registries": vessel.get("gfw_registries"),
+            "self_reported_fishing": vessel.get(
+                "gfw_self_reported_fishing"
+            ),
+        },
     }
 
 

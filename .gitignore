@@ -34,3 +34,4 @@ frontend-vite/node_modules/
 backend/data/cache/*
 !backend/data/cache/opensanctions_vessels.json
 .vercel
+fishing-vessels-v3.csv

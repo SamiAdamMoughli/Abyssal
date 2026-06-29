@@ -1388,7 +1388,22 @@ a.leaflet-popup-close-button {
   letter-spacing: 2px;
   color: var(--ss-orange);
   margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
+.dp-section--gfw .dp-section-title { color: var(--ss-teal); }
+.dp-gfw-badge {
+  font-family: monospace;
+  font-size: 9px;
+  letter-spacing: 0;
+  background: rgba(0,229,255,.1);
+  color: var(--ss-teal);
+  border: 1px solid rgba(0,229,255,.25);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+.dp-flag-warn { color: #ff6d00; font-weight: 600; }
 
 /* Key-value grid */
 .dp-grid {

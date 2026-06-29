@@ -44,6 +44,17 @@ class VesselSchema(BaseModel):
     data_source: str = "synthetic"
     updated_at: Optional[datetime] = None
 
+    # GFW registry enrichment
+    gfw_geartype: Optional[str] = None
+    gfw_flag: Optional[str] = None
+    gfw_length_m: Optional[float] = None
+    gfw_engine_kw: Optional[float] = None
+    gfw_tonnage_gt: Optional[float] = None
+    gfw_fishing_hours: Optional[float] = None
+    gfw_active_hours: Optional[float] = None
+    gfw_registries: Optional[str] = None
+    gfw_self_reported_fishing: Optional[bool] = None
+
 
 # ---------------------------------------------------------------------------
 # Collection responses
@@ -93,6 +104,42 @@ class BboxParams(BaseModel):
     def as_tuple(self) -> tuple[float, float, float, float]:
         """(min_lon, min_lat, max_lon, max_lat) — PostGIS convention."""
         return (self.min_lon, self.min_lat, self.max_lon, self.max_lat)
+
+
+# ---------------------------------------------------------------------------
+# Alert schemas
+# ---------------------------------------------------------------------------
+
+
+class AlertSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    alert_id: str
+    rule_id: str
+    rule_label: str
+    severity: str
+    message: str
+    mmsi: Optional[str] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    h3_index: Optional[str] = None
+    acknowledged: bool = False
+    acknowledged_by: Optional[str] = None
+    acknowledged_at: Optional[datetime] = None
+    triggered_at: datetime
+    resolved_at: Optional[datetime] = None
+
+
+class AlertListResponse(BaseModel):
+    count: int
+    alerts: list[AlertSchema]
+
+
+class AlertAckResponse(BaseModel):
+    alert_id: str
+    acknowledged: bool
+    acknowledged_by: str
+    acknowledged_at: datetime
 
 
 # ---------------------------------------------------------------------------

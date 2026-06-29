@@ -29,6 +29,7 @@ from sqlalchemy.orm import sessionmaker
 from spyhop.config import get_settings
 from spyhop.db.models import (
     EnvironmentRaster,
+    GFWVesselRegistry,
     H3RiskCorridor,
     IUUBlacklist,
     SanctionedVessel,
@@ -211,6 +212,7 @@ def fetch_gfw_vessels(self: Any) -> dict[str, Any]:
         })
         score_map[v["mmsi"]] = risk_score
 
+    rows = _enrich_with_gfw(rows)
     _upsert_vessels_sync(rows)
     _pipeline_update_scores(score_map)
 
@@ -353,6 +355,7 @@ def fetch_digitraffic_vessels(self: Any) -> dict[str, Any]:
             "data_source":               "digitraffic",
         })
 
+    rows = _enrich_with_gfw(rows)
     _upsert_vessels_sync(rows)
     _pipeline_update_scores(score_map)
 
@@ -506,6 +509,7 @@ def fetch_and_score_vessels(self: Any) -> dict[str, Any]:
 
         # -- PostGIS upsert (sync, single transaction) ---------------------
         vessel_rows = _build_vessel_rows(assessments)
+        vessel_rows = _enrich_with_gfw(vessel_rows)
         _upsert_vessels_sync(vessel_rows)
 
         # -- Redis: pipeline sorted-set updates (ONE RTT) ------------------
@@ -545,6 +549,118 @@ def fetch_and_score_vessels(self: Any) -> dict[str, Any]:
     except Exception as exc:
         log.exception("fetch_and_score_vessels failed: %s", exc)
         raise self.retry(exc=exc)
+
+
+# ---------------------------------------------------------------------------
+# Task: load_gfw_vessel_registry  (one-shot manual trigger)
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(
+    name="spyhop.worker.tasks.load_gfw_vessel_registry",
+    soft_time_limit=600,
+    time_limit=720,
+)
+def load_gfw_vessel_registry(csv_path: str | None = None) -> dict[str, Any]:
+    """Bulk-load fishing-vessels-v3.csv into gfw_vessel_registry.
+
+    Uses PostgreSQL COPY via psycopg2 for throughput (~773k rows in <30s).
+    Idempotent: truncates the table and refreshes the materialized view on
+    every run. Trigger manually via:
+        celery -A spyhop.worker.celery_app call \\
+            spyhop.worker.tasks.load_gfw_vessel_registry
+    """
+    import csv
+    import io
+    import os
+
+    path = csv_path or os.path.join(
+        os.path.dirname(__file__), "../../../data/fishing-vessels-v3.csv"
+    )
+    path = os.path.abspath(path)
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"GFW registry CSV not found: {path}")
+
+    def _parse_float(v: str) -> float | None:
+        v = v.strip()
+        return float(v) if v else None
+
+    def _parse_bool(v: str) -> bool | None:
+        v = v.strip().lower()
+        if v == "true":
+            return True
+        if v == "false":
+            return False
+        return None
+
+    def _parse_str(v: str) -> str | None:
+        v = v.strip()
+        return v if v else None
+
+    col_order = [
+        "mmsi", "year", "flag_ais", "flag_registry", "flag_gfw",
+        "vessel_class_inferred", "vessel_class_inferred_score",
+        "vessel_class_registry", "vessel_class_gfw",
+        "self_reported_fishing_vessel",
+        "length_m_gfw", "engine_power_kw_gfw", "tonnage_gt_gfw",
+        "registries_listed", "active_hours", "fishing_hours",
+    ]
+
+    log.info("gfw_registry.load.start", path=path)
+    t0 = time.time()
+
+    with SyncSession() as session:
+        conn = session.connection().connection  # raw psycopg2 connection
+        cur = conn.cursor()
+
+        cur.execute("TRUNCATE TABLE gfw_vessel_registry;")
+
+        buf = io.StringIO()
+        writer = csv.writer(buf, delimiter="\t", lineterminator="\n")
+
+        with open(path, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                writer.writerow([
+                    row["mmsi"].strip(),
+                    int(row["year"]) if row["year"].strip() else 0,
+                    _parse_str(row.get("flag_ais", "")),
+                    _parse_str(row.get("flag_registry", "")),
+                    _parse_str(row.get("flag_gfw", "")),
+                    _parse_str(row.get("vessel_class_inferred", "")),
+                    _parse_float(row.get("vessel_class_inferred_score", "")),
+                    _parse_str(row.get("vessel_class_registry", "")),
+                    _parse_str(row.get("vessel_class_gfw", "")),
+                    _parse_bool(row.get("self_reported_fishing_vessel", "")),
+                    _parse_float(row.get("length_m_gfw", "")),
+                    _parse_float(row.get("engine_power_kw_gfw", "")),
+                    _parse_float(row.get("tonnage_gt_gfw", "")),
+                    _parse_str(row.get("registries_listed", "")),
+                    _parse_float(row.get("active_hours", "")),
+                    _parse_float(row.get("fishing_hours", "")),
+                ])
+
+        buf.seek(0)
+        cur.copy_from(
+            buf,
+            "gfw_vessel_registry",
+            sep="\t",
+            null="None",
+            columns=col_order,
+        )
+        conn.commit()
+
+        cur.execute(
+            "REFRESH MATERIALIZED VIEW CONCURRENTLY gfw_vessel_latest;"
+        )
+        conn.commit()
+
+        cur.execute("SELECT COUNT(*) FROM gfw_vessel_registry;")
+        count = cur.fetchone()[0]
+
+    elapsed = time.time() - t0
+    log.info("gfw_registry.load.done", rows=count, elapsed_s=round(elapsed, 1))
+    return {"rows_loaded": count, "elapsed_s": round(elapsed, 1)}
 
 
 # ---------------------------------------------------------------------------
@@ -670,6 +786,56 @@ def _build_vessel_rows(assessments: list) -> list[dict[str, Any]]:
             "data_source": settings.DATA_SOURCE,
         })
     return rows
+
+
+def _enrich_with_gfw(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Join rows against gfw_vessel_latest for flag/geartype/dimension enrichment.
+
+    One bulk SELECT — O(1) DB round-trip regardless of batch size.
+    Fields from GFW take precedence only when the row's existing value is
+    absent/unknown, so live AIS name/speed data is never overwritten.
+    """
+    if not rows:
+        return rows
+    mmsis = [r["mmsi"] for r in rows if r.get("mmsi")]
+    if not mmsis:
+        return rows
+
+    with SyncSession() as session:
+        result = session.execute(
+            text("""
+                SELECT mmsi, flag_gfw, vessel_class_gfw,
+                       length_m_gfw, engine_power_kw_gfw, tonnage_gt_gfw,
+                       fishing_hours, active_hours, registries_listed,
+                       self_reported_fishing_vessel
+                FROM gfw_vessel_latest
+                WHERE mmsi = ANY(:mmsis)
+            """),
+            {"mmsis": mmsis},
+        ).fetchall()
+
+    gfw_map = {r.mmsi: r for r in result}
+
+    enriched = []
+    for row in rows:
+        rec = dict(row)
+        gfw = gfw_map.get(rec.get("mmsi", ""))
+        if gfw:
+            if not rec.get("flag") or rec["flag"] in ("UNK", ""):
+                rec["flag"] = gfw.flag_gfw or rec.get("flag", "UNK")
+            if not rec.get("vessel_type") or rec["vessel_type"] in ("unknown", "fishing", ""):
+                rec["vessel_type"] = gfw.vessel_class_gfw or rec.get("vessel_type", "unknown")
+            rec["gfw_geartype"] = gfw.vessel_class_gfw
+            rec["gfw_flag"] = gfw.flag_gfw
+            rec["gfw_length_m"] = gfw.length_m_gfw
+            rec["gfw_engine_kw"] = gfw.engine_power_kw_gfw
+            rec["gfw_tonnage_gt"] = gfw.tonnage_gt_gfw
+            rec["gfw_fishing_hours"] = gfw.fishing_hours
+            rec["gfw_active_hours"] = gfw.active_hours
+            rec["gfw_registries"] = gfw.registries_listed
+            rec["gfw_self_reported_fishing"] = gfw.self_reported_fishing_vessel
+        enriched.append(rec)
+    return enriched
 
 
 def _upsert_vessels_sync(rows: list[dict[str, Any]]) -> None:

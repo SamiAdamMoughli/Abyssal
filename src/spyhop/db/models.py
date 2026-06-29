@@ -133,6 +133,35 @@ class VesselPosition(Base):
         String(20), nullable=True, index=True
     )
 
+    # --- GFW vessel registry enrichment (from fishing-vessels-v3) -----------
+    gfw_geartype: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )
+    gfw_flag: Mapped[Optional[str]] = mapped_column(
+        String(10), nullable=True
+    )
+    gfw_length_m: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )
+    gfw_engine_kw: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )
+    gfw_tonnage_gt: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )
+    gfw_fishing_hours: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )
+    gfw_active_hours: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )
+    gfw_registries: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )
+    gfw_self_reported_fishing: Mapped[Optional[bool]] = mapped_column(
+        Boolean, nullable=True
+    )
+
     # --- Risk output ---------------------------------------------------------
     risk_score: Mapped[float] = mapped_column(Float, default=0.0)
     top_reason_label: Mapped[Optional[str]] = mapped_column(
@@ -201,6 +230,15 @@ class VesselPosition(Base):
             "historical_risk_score": self.historical_risk_score,
             "verified_vessel_type": self.verified_vessel_type,
             "h3_index": self.h3_index,
+            "gfw_geartype": self.gfw_geartype,
+            "gfw_flag": self.gfw_flag,
+            "gfw_length_m": self.gfw_length_m,
+            "gfw_engine_kw": self.gfw_engine_kw,
+            "gfw_tonnage_gt": self.gfw_tonnage_gt,
+            "gfw_fishing_hours": self.gfw_fishing_hours,
+            "gfw_active_hours": self.gfw_active_hours,
+            "gfw_registries": self.gfw_registries,
+            "gfw_self_reported_fishing": self.gfw_self_reported_fishing,
             "risk_score": self.risk_score,
             "top_reason_label": self.top_reason_label,
             "reasons": reasons,
@@ -456,6 +494,50 @@ class H3RiskCorridor(Base):
     materialized_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+# ---------------------------------------------------------------------------
+# GFWVesselRegistry
+# ---------------------------------------------------------------------------
+
+
+class GFWVesselRegistry(Base):
+    """GFW fishing-vessels-v3 registry — one row per (mmsi, year).
+
+    Loaded once from the static CSV via the load_gfw_vessel_registry task.
+    Query via the gfw_vessel_latest materialized view for the most recent
+    record per MMSI.
+    """
+
+    __tablename__ = "gfw_vessel_registry"
+    __table_args__ = (
+        PrimaryKeyConstraint("mmsi", "year", name="pk_gfw_vessel_registry"),
+        Index("idx_gfw_registry_mmsi", "mmsi"),
+    )
+
+    mmsi: Mapped[str] = mapped_column(String(20), nullable=False, primary_key=True)
+    year: Mapped[int] = mapped_column(Integer, nullable=False, primary_key=True)
+
+    flag_ais: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    flag_registry: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    flag_gfw: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+
+    vessel_class_inferred: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    vessel_class_inferred_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    vessel_class_registry: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    vessel_class_gfw: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+
+    self_reported_fishing_vessel: Mapped[Optional[bool]] = mapped_column(
+        Boolean, nullable=True
+    )
+
+    length_m_gfw: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    engine_power_kw_gfw: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    tonnage_gt_gfw: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    registries_listed: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    active_hours: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    fishing_hours: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
 
 # ---------------------------------------------------------------------------
