@@ -522,10 +522,18 @@ class GFWVesselRegistry(Base):
     flag_registry: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     flag_gfw: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
-    vessel_class_inferred: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    vessel_class_inferred_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    vessel_class_registry: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    vessel_class_gfw: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    vessel_class_inferred: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True
+    )
+    vessel_class_inferred_score: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )
+    vessel_class_registry: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True
+    )
+    vessel_class_gfw: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True
+    )
 
     self_reported_fishing_vessel: Mapped[Optional[bool]] = mapped_column(
         Boolean, nullable=True
