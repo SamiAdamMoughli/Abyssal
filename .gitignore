@@ -35,3 +35,4 @@ backend/data/cache/*
 !backend/data/cache/opensanctions_vessels.json
 .vercel
 fishing-vessels-v3.csv
+protected_areas.csv
