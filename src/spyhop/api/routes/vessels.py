@@ -198,7 +198,7 @@ async def stream_vessels(
                         "data": ujson.dumps(payload.model_dump(mode="json"))
                     }
             except Exception as exc:
-                log.warning("stream.error", error=str(exc))
+                log.error("stream.error", error=str(exc))
                 yield {"event": "error", "data": str(exc)}
                 break
             await asyncio.sleep(settings.VESSEL_STREAM_POLL_SECONDS)
@@ -224,39 +224,42 @@ async def get_vessel_by_mmsi(
 
 @router.get("/protected-areas")
 def get_protected_areas(
-    min_lat: Optional[float] = Query(None),
-    max_lat: Optional[float] = Query(None),
-    min_lon: Optional[float] = Query(None),
-    max_lon: Optional[float] = Query(None),
+    min_lat: Optional[float] = Query(None, ge=-90, le=90),
+    max_lat: Optional[float] = Query(None, ge=-90, le=90),
+    min_lon: Optional[float] = Query(None, ge=-180, le=180),
+    max_lon: Optional[float] = Query(None, ge=-180, le=180),
 ) -> Dict[str, Any]:
-    """WDPA MPA polygons as GeoJSON for the map layer.
+    """MPA bounding boxes as GeoJSON rectangles, filtered to the requested bbox."""
+    from spyhop.enrichment.mpa import MAJOR_MPAS
 
-    Delegates to the backend geo module (GFW Data API with local fallback).
-    Synchronous because the geo module uses requests, not httpx.
-    """
-    try:
-        from backend.app import geo
+    def _intersects(mpa, mn_lat, mx_lat, mn_lon, mx_lon) -> bool:
+        if mpa.max_lat < mn_lat or mpa.min_lat > mx_lat:
+            return False
+        if mpa.wraps_antimeridian:
+            return mn_lon <= mpa.max_lon or mx_lon >= mpa.min_lon
+        return not (mpa.max_lon < mn_lon or mpa.min_lon > mx_lon)
 
-        bbox = None
-        if all(v is not None for v in (min_lat, max_lat, min_lon, max_lon)):
-            bbox = (min_lat, max_lat, min_lon, max_lon)
-            geo.set_area(bbox)
-
-        fc = geo.get_protected_areas_geojson()
-        source = "gfw" if geo._source() == "gfw" else "local"
-
-        if not fc.get("features"):
-            fallback = geo.local_protected_areas(bbox)
-            if fallback.get("features"):
-                fc = fallback
-                source = "local-fallback"
-
+    def _box_to_feature(mpa):
+        min_lon = mpa.min_lon if not mpa.wraps_antimeridian else -180.0
+        max_lon = mpa.max_lon if not mpa.wraps_antimeridian else 180.0
+        coords = [[
+            [min_lon, mpa.min_lat], [max_lon, mpa.min_lat],
+            [max_lon, mpa.max_lat], [min_lon, mpa.max_lat],
+            [min_lon, mpa.min_lat],
+        ]]
         return {
-            "type": fc.get("type", "FeatureCollection"),
-            "features": fc.get("features", []),
-            "source": source,
-            "count": len(fc.get("features", [])),
+            "type": "Feature",
+            "geometry": {"type": "Polygon", "coordinates": coords},
+            "properties": {"name": mpa.name, "iucn_cat": "MPA", "area_km2": None},
         }
+
+    try:
+        have_bbox = all(v is not None for v in (min_lat, max_lat, min_lon, max_lon))
+        features = [
+            _box_to_feature(m) for m in MAJOR_MPAS
+            if not have_bbox or _intersects(m, min_lat, max_lat, min_lon, max_lon)
+        ]
+        return {"type": "FeatureCollection", "features": features, "source": "local", "count": len(features)}
     except Exception as exc:
         log.warning("protected_areas.error", error=str(exc))
         return {
