@@ -240,6 +240,133 @@ def fetch_gfw_vessels(self: Any) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Task: fetch_digitraffic_vessels  — all vessel types via Finland Digitraffic
+# ---------------------------------------------------------------------------
+
+@celery_app.task(
+    name="spyhop.worker.tasks.fetch_digitraffic_vessels",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=60,
+    soft_time_limit=120,
+    time_limit=150,
+)
+def fetch_digitraffic_vessels(self: Any) -> dict[str, Any]:
+    """Fetch live AIS positions from Digitraffic (Finnish waters + Baltic Sea).
+
+    Joins /v1/vessels (name, ship type) with /v1/locations (lat/lon/sog) and
+    upserts into vessel_positions.  Covers ALL vessel types — cargo, tanker,
+    passenger, fishing, special — at no API cost under CC BY 4.0.
+    """
+    import gzip as _gzip
+    import time as _time
+    from urllib.request import urlopen as _urlopen, Request as _Request
+
+    from spyhop.enrichment.mpa import in_protected_area as _in_mpa
+
+    _HEADERS = {"Accept": "application/json", "Accept-Encoding": "gzip"}
+    _BASE = "https://meri.digitraffic.fi/api/ais/v1"
+
+    # AIS numeric ship type → our vessel_type label
+    _SHIP_TYPE: list[tuple[range, str]] = [
+        (range(30, 40), "fishing"),
+        (range(60, 70), "passenger"),
+        (range(70, 80), "cargo"),
+        (range(80, 90), "tanker"),
+        (range(50, 60), "special"),
+        (range(90, 100), "other"),
+    ]
+
+    def _ship_label(t: int | None) -> str:
+        if t is None:
+            return "unknown"
+        for r, label in _SHIP_TYPE:
+            if t in r:
+                return label
+        return "unknown"
+
+    def _fetch(path: str) -> Any:
+        req = _Request(f"{_BASE}{path}", headers=_HEADERS)
+        with _urlopen(req, timeout=30) as resp:
+            raw = resp.read()
+        try:
+            return ujson.loads(_gzip.decompress(raw))
+        except Exception:
+            return ujson.loads(raw)
+
+    t0 = _time.monotonic()
+    try:
+        vessel_meta = _fetch("/vessels")   # list of {mmsi, name, shipType, ...}
+        pos_fc      = _fetch("/locations") # GeoJSON FeatureCollection
+    except Exception as exc:
+        log.exception("fetch_digitraffic_vessels: HTTP error: %s", exc)
+        raise self.retry(exc=exc)
+
+    # Index positions by MMSI
+    positions: dict[str, dict] = {}
+    for feat in pos_fc.get("features", []):
+        mmsi = str(feat.get("mmsi", ""))
+        coords = (feat.get("geometry") or {}).get("coordinates")
+        if not mmsi or not coords:
+            continue
+        props = feat.get("properties") or {}
+        positions[mmsi] = {"lon": coords[0], "lat": coords[1], "sog": props.get("sog") or 0.0}
+
+    rows: list[dict[str, Any]] = []
+    score_map: dict[str, float] = {}
+
+    for v in vessel_meta:
+        mmsi = str(v.get("mmsi", ""))
+        pos = positions.get(mmsi)
+        if not pos:
+            continue
+        lat, lon, sog = pos["lat"], pos["lon"], pos["sog"]
+        if not (-90 < lat < 90) or not (-180 < lon < 180):
+            continue
+
+        vtype = _ship_label(v.get("shipType"))
+        name = (v.get("name") or f"V-{mmsi[-4:]}").strip()[:200]
+        mpa_name = _in_mpa(lat, lon)
+        in_mpa = mpa_name is not None
+
+        raw_score = 0.0
+        top_reason = None
+        if in_mpa:
+            raw_score += 40.0
+            top_reason = f"In MPA: {mpa_name}"
+
+        risk_score = min(raw_score, 100.0)
+        cell = h3.latlng_to_cell(lat, lon, 5)
+        score_map[mmsi] = risk_score
+
+        rows.append({
+            "mmsi":                      mmsi,
+            "name":                      name,
+            "flag":                      "UNK",
+            "vessel_type":               vtype,
+            "lat":                       lat,
+            "lon":                       lon,
+            "speed_knots":               sog,
+            "ais_gap_hours":             0.0,
+            "loitering_hours":           0.0,
+            "rendezvous_duration_hours": 0.0,
+            "in_protected_area":         in_mpa,
+            "risk_score":                risk_score,
+            "top_reason_label":          top_reason,
+            "reasons_json":              [],
+            "data_source":               "digitraffic",
+            "h3_index":                  cell,
+        })
+
+    _upsert_vessels_sync(rows)
+    _pipeline_update_scores(score_map)
+
+    elapsed_ms = (_time.monotonic() - t0) * 1000
+    log.info("fetch_digitraffic_vessels complete vessels=%d elapsed_ms=%.1f", len(rows), elapsed_ms)
+    return {"status": "ok", "vessels": len(rows), "elapsed_ms": round(elapsed_ms, 1)}
+
+
+# ---------------------------------------------------------------------------
 # Task: fetch_and_score_vessels  (legacy — kept for reference, not scheduled)
 # ---------------------------------------------------------------------------
 

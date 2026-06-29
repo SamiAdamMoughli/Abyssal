@@ -86,6 +86,11 @@ celery_app.conf.update(
             "schedule": 300.0,  # 5 minutes
             "options": {"queue": "scoring"},
         },
+        "fetch-digitraffic-vessels-every-5min": {
+            "task": "spyhop.worker.tasks.fetch_digitraffic_vessels",
+            "schedule": 300.0,  # 5 minutes — all vessel types, Baltic + broader AIS
+            "options": {"queue": "scoring"},
+        },
         "sync-iuu-list-daily": {
             "task": "spyhop.worker.tasks.sync_iuu_list",
             "schedule": crontab(hour=2, minute=0),
