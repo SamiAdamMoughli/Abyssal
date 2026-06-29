@@ -1,3 +1,20 @@
+/**
+ * Ray-casting point-in-polygon test.
+ * polygon: array of [lat, lon] pairs (Leaflet convention).
+ */
+export function pointInPolygon(lat, lon, polygon) {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [yi, xi] = polygon[i];
+    const [yj, xj] = polygon[j];
+    if ((yi > lat) !== (yj > lat) &&
+        lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
 export function nmToKm(nm) {
   return nm * 1.852;
 }

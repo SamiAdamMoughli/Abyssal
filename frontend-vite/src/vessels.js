@@ -1,5 +1,7 @@
 import { VESSEL_CATEGORIES, CATEGORY_LABELS, SUBTYPE_LABELS } from './constants.js';
 import { state } from './state.js';
+import { pointInPolygon } from './geo.js';
+import { activeRegion } from './phase.js';
 
 export function vesselCategoryId(type) {
   for (const [catId, types] of Object.entries(VESSEL_CATEGORIES)) {
@@ -59,8 +61,14 @@ export function matchesQuickFilters(v) {
 }
 
 export function getVisibleVessels() {
+  const region = activeRegion();
   return state.vesselsCache
-    .filter(v => matchesSearch(v, state.currentFilter) && matchesCategory(v) && matchesQuickFilters(v))
+    .filter(v => {
+      if (region?.polygon && v.lat != null && v.lon != null) {
+        if (!pointInPolygon(v.lat, v.lon, region.polygon)) return false;
+      }
+      return matchesSearch(v, state.currentFilter) && matchesCategory(v) && matchesQuickFilters(v);
+    })
     .slice()
     .sort(sortVessels);
 }
