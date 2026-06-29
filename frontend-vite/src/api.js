@@ -3,14 +3,22 @@ import { state } from './state.js';
 import { syncMarkers } from './markers.js';
 import { loadMPAs } from './mpa.js';
 import { renderCards, setStatus, showError, hideError, setOverlay, setButtonLoading, showSkeletons, updateVesselCounts } from './ui.js';
+import { pointInPolygon } from './geo.js';
+import { activeRegion } from './phase.js';
+
+function filterToRegion(vessels) {
+  const region = activeRegion();
+  if (!region?.polygon) return vessels;
+  return vessels.filter(v => v.lat != null && v.lon != null && pointInPolygon(v.lat, v.lon, region.polygon));
+}
 
 export function buildQuery(params) {
   const q = new URLSearchParams({ source: state.currentSource });
   if (params) {
-    q.set('min_lat', params.min_lat.toFixed(4));
-    q.set('max_lat', params.max_lat.toFixed(4));
-    q.set('min_lon', params.min_lon.toFixed(4));
-    q.set('max_lon', params.max_lon.toFixed(4));
+    q.set('min_lat', Math.max(params.min_lat, -90).toFixed(4));
+    q.set('max_lat', Math.min(params.max_lat,  90).toFixed(4));
+    q.set('min_lon', Math.max(params.min_lon, -180).toFixed(4));
+    q.set('max_lon', Math.min(params.max_lon,  180).toFixed(4));
     if (params.start) q.set('start_date', params.start);
     if (params.end)   q.set('end_date',   params.end);
   }
@@ -37,8 +45,9 @@ export function openStream(params) {
     try {
       const vData = JSON.parse(e.data);
       if (!Array.isArray(vData?.vessels)) return;
-      state.vesselsCache = vData.vessels;
-      syncMarkers(vData.vessels);
+      const vessels = filterToRegion(vData.vessels);
+      state.vesselsCache = vessels;
+      syncMarkers(vessels);
       renderCards();
       updateVesselCounts();
     } catch (err) {
@@ -105,9 +114,10 @@ export async function loadData(params) {
     state.markerLayer.clearLayers();
     state.ringLayer.clearLayers();
     Object.keys(state.markersByMmsi).forEach(k => delete state.markersByMmsi[k]);
-    syncMarkers(vData.vessels);
+    const vessels = filterToRegion(vData.vessels);
+    syncMarkers(vessels);
 
-    state.vesselsCache = vData.vessels;
+    state.vesselsCache = vessels;
     state._lastFetch = Date.now();
     renderCards();
     updateVesselCounts();
